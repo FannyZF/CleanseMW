@@ -115,6 +115,7 @@ def fetch_order_info(customer_order_no: str):
     district = consignee.get("consigneeDistrict") or ""
     address = consignee.get("consigneeAddress") or ""
     postcode = consignee.get("consigneePostcode") or ""
+    consignee_name = consignee.get("consigneeName") or ""
 
     raw_address = f"{province}{city}{district}{address}".strip()
 
@@ -125,6 +126,7 @@ def fetch_order_info(customer_order_no: str):
         "district": district,
         "address": address,
         "postcode": postcode,
+        "consigneeName": consignee_name,
         "raw_address": raw_address,
         "provided_zipcode": postcode,
     }, None
@@ -201,7 +203,57 @@ def extract_cleanse_result(cleanse_response: dict) -> dict:
     return results_map
 
 
-# ── ZipCloud for unverified address correction ─────────────────────────
+# ── Name cleansing via API Hub ─────────────────────────────────────────
+def cleanse_names_batch(items: list):
+    cfg = _get_config()
+    batch = [
+        {
+            "order_id": item["customerOrderNo"],
+            "raw_name": item.get("consigneeName", ""),
+        }
+        for item in items
+        if item.get("consigneeName")
+    ]
+    if not batch:
+        return {}
+
+    headers = {
+        "Content-Type": "application/json",
+        "X-API-Key": cfg["address_api_key"],
+    }
+
+    logger.info("Cleansing %d names", len(batch))
+    resp = requests.post(
+        f"{cfg['address_api_url']}/jp/cleanse/name",
+        headers=headers,
+        json=batch,
+        timeout=120,
+    )
+    return resp.json()
+
+
+def extract_name_result(name_response: dict) -> dict:
+    results_map = {}
+    if "results" in name_response:
+        for r in name_response["results"]:
+            ref_id = r.get("reference_id", "")
+            data = r.get("data", {})
+            name_data = data.get("name", {})
+            results_map[ref_id] = {
+                "original_name": name_data.get("original", ""),
+                "english_romaji": name_data.get("english_romaji", ""),
+            }
+        return results_map
+
+    # Single-item fallback
+    ref_id = name_response.get("reference_id", "")
+    data = name_response.get("data", {})
+    name_data = data.get("name", {})
+    results_map[ref_id] = {
+        "original_name": name_data.get("original", ""),
+        "english_romaji": name_data.get("english_romaji", ""),
+    }
+    return results_map
 def lookup_zipcloud(zipcode: str) -> str:
     if not zipcode:
         return ""
@@ -225,17 +277,22 @@ def extract_digit_candidates(raw_address: str) -> list:
     candidates = re.findall(r"\d+", raw_address)
     # filter out likely zipcodes (exactly 7 digits) and very long numbers
     return [c for c in candidates if len(c) != 7 and len(c) <= 5]
-def update_order_its(customer_order_no: str, cleansed_address: str, cleansed_postcode: str):
+def update_order_its(customer_order_no: str, cleansed_address: str, cleansed_postcode: str, consignee_name: str = "", consignee_company: str = ""):
+    consignee = {
+        "consigneeCountry": "JP",
+        "consigneeProvince": " ",
+        "consigneeCity": " ",
+        "consigneeDistrict": " ",
+        "consigneeAddress": cleansed_address,
+        "consigneePostcode": cleansed_postcode,
+    }
+    if consignee_name:
+        consignee["consigneeName"] = consignee_name
+    if consignee_company:
+        consignee["consigneeCompany"] = consignee_company
     body = {
         "customerOrderNo": customer_order_no,
-        "consignee": {
-            "consigneeCountry": "JP",
-            "consigneeProvince": " ",
-            "consigneeCity": " ",
-            "consigneeDistrict": " ",
-            "consigneeAddress": cleansed_address,
-            "consigneePostcode": cleansed_postcode,
-        },
+        "consignee": consignee,
     }
     body_str = json.dumps(body, ensure_ascii=False)
     headers = _its_headers(body_str)
@@ -311,6 +368,7 @@ def step1_fetch_orders():
                 "district": item["district"],
                 "address": item["address"],
                 "postcode": item["postcode"],
+                "consigneeName": item["consigneeName"],
                 "status": "success",
             })
             success_items.append(item)
@@ -346,12 +404,13 @@ def step2_cleanse():
         return jsonify({"error": "任务已过期，请从第一步重新开始"}), 400
 
     success_items = task["success_items"]
-    logger.info("[Step 2] Cleansing %d address(es)", len(success_items))
+    logger.info("[Step 2] Cleansing %d item(s)", len(success_items))
 
     BATCH_SIZE = 100
     results = []
     all_cleansed = {}
     unverified = []
+    all_names = {}
 
     for i in range(0, len(success_items), BATCH_SIZE):
         sub_batch = success_items[i : i + BATCH_SIZE]
@@ -398,7 +457,7 @@ def step2_cleanse():
                         "message": error_msg,
                     })
         except Exception as exc:
-            logger.exception("[Step 2] Batch failed")
+            logger.exception("[Step 2] Address batch failed")
             for item in sub_batch:
                 results.append({
                     "customerOrderNo": item["customerOrderNo"],
@@ -408,9 +467,26 @@ def step2_cleanse():
                     "message": str(exc),
                 })
 
+    # Name cleansing
+    try:
+        name_resp = cleanse_names_batch(success_items)
+        if name_resp.get("status") == "success":
+            all_names = extract_name_result(name_resp)
+            for r in results:
+                order_no = r["customerOrderNo"]
+                if order_no in all_names:
+                    r["original_name"] = all_names[order_no]["original_name"]
+                    r["english_romaji"] = all_names[order_no]["english_romaji"]
+                    r["consigneeName"] = all_names[order_no]["original_name"]
+        else:
+            logger.warning("[Step 2] Name cleansing failed: %s", name_resp.get("message", ""))
+    except Exception as exc:
+        logger.exception("[Step 2] Name batch failed")
+
     # Store cleanse results
     with _task_lock:
         _task_store[task_id]["all_cleansed"] = all_cleansed
+        _task_store[task_id]["all_names"] = all_names
         _task_store[task_id]["success_items"] = success_items
 
     # Enrich unverified orders with ZipCloud data and digit candidates
@@ -486,12 +562,14 @@ def step3_update():
 
     success_items = task["success_items"]
     all_cleansed = task.get("all_cleansed", {})
+    all_names = task.get("all_names", {})
     logger.info("[Step 3] Updating %d order(s)", len(success_items))
 
     results = []
     for item in success_items:
         order_no = item["customerOrderNo"]
         cdata = all_cleansed.get(order_no, {})
+        ndata = all_names.get(order_no, {})
 
         if not cdata.get("cleansed_address"):
             results.append({
@@ -506,6 +584,7 @@ def step3_update():
                 "customerOrderNo": order_no,
                 "cleansed_address": cdata["cleansed_address"],
                 "cleansed_zipcode": cdata["cleansed_zip"],
+                "original_name": ndata.get("original_name", ""),
                 "status": "skip",
                 "message": "地址未通过验证，跳过更新",
             })
@@ -513,13 +592,17 @@ def step3_update():
 
         cleansed_address = cdata["cleansed_address"]
         cleansed_zip = cdata["cleansed_zip"]
+        consignee_name = ndata.get("original_name", "")
+        consignee_company = ndata.get("english_romaji", "")
         try:
-            update_resp = update_order_its(order_no, cleansed_address, cleansed_zip)
+            update_resp = update_order_its(order_no, cleansed_address, cleansed_zip, consignee_name, consignee_company)
             if update_resp.get("code") == 0:
                 results.append({
                     "customerOrderNo": order_no,
                     "cleansed_address": cleansed_address,
                     "cleansed_zipcode": cleansed_zip,
+                    "original_name": consignee_name,
+                    "english_romaji": consignee_company,
                     "status": "success",
                     "message": "更新成功",
                 })
@@ -528,6 +611,8 @@ def step3_update():
                     "customerOrderNo": order_no,
                     "cleansed_address": cleansed_address,
                     "cleansed_zipcode": cleansed_zip,
+                    "original_name": consignee_name,
+                    "english_romaji": consignee_company,
                     "status": "error",
                     "message": update_resp.get("msg", "更新失败"),
                 })
@@ -537,6 +622,8 @@ def step3_update():
                 "customerOrderNo": order_no,
                 "cleansed_address": cleansed_address,
                 "cleansed_zipcode": cleansed_zip,
+                "original_name": consignee_name,
+                "english_romaji": consignee_company,
                 "status": "error",
                 "message": str(exc),
             })
