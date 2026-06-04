@@ -7,8 +7,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-ENV PORT=5000
+ENV PORT=19933
 
-EXPOSE 5000
+EXPOSE 19933
 
-CMD ["gunicorn", "wsgi:app", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "300"]
+CMD ["gunicorn", "wsgi:app", "--bind", "0.0.0.0:19933", "--workers", "2", "--timeout", "300"]
