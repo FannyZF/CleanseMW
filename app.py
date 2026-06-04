@@ -257,6 +257,7 @@ _task_store: dict = {}
 
 
 def _parse_order_numbers(raw_text: str):
+    raw_text = raw_text.replace(",", "\n")
     order_numbers = [line.strip() for line in raw_text.splitlines() if line.strip()]
     seen = set()
     return [x for x in order_numbers if not (x in seen or seen.add(x))]
