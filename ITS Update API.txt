@@ -1,0 +1,184 @@
+ITS 国际物流管理系统
+项目管理文档
+ITS-小包修改订单接口文档
+文档作者： 刘春明
+创建日期： 2026-05-25
+确认日期： 2026-05-26
+更新日期： 2026-05-26
+当前版本： 1.0.0
+2/ 8
+文档控制
+日期 作者 版本 参考版本 备注
+2026/5/25 刘春明 1.0 初版
+3/ 8
+1 引言...................................................................................................................................................3
+1.1 编写目的...................................................................................................................................3
+1.2 项目背景...................................................................................................................................3
+2 API.................................................................................................................................................... 3
+2.1 获取账户 API 授权.................................................................................................................. 3
+2.1.1 获取授权码和密钥..........................................................................................................3
+2.1.2 环境...............................................................................................................................3
+2.1.3 系统级字段说明(每个接口方法都需传的 RequestHeader 参数)..................................... 3
+2.1.4 加密签名........................................................................................................................4
+2.2 修改订单...................................................................................................................................4
+1 引言
+1.1 编写目的
+该文档主要描述了物流系统的相关接口，提供给会员的开发人员和测试人员参考。
+1.2 项目背景
+为了方便有软件开发能力的的会员更便捷、快速的管理订单，特提供本接口。 2 API
+2.1 获取账户 API 授权
+2.1.1 获取授权码和密钥
+由 IT 同事分配对应开发的 apikey、appSecret 和 usertoken
+2.1.2 环境
+测试接口地址：http://域名:端口/its-api/cs/api/{方法名}
+生产接口地址：http://域名:端口/its-api/cs/api/{方法名}
+2.1.3 系统级字段说明(每个接口方法都需传的 RequestHeader 参数)
+RequestHeade 请求头
+4/ 8
+r
+属性 类型 描述 必填
+apikey String API 授权码，通过物流公司运营获取 Y
+signature String 签名 必填，根据加密规则生成 Y
+timestamp String 请求时间戳,精确到秒。10 位数字 Y
+usertoken String 客户唯一标识，可以从 OMS 的系统设置-系统对接 中获取 Y
+Content-Type String 固定为: application/json;charset=UTF-8 Y
+2.1.4 加密签名
+加密方式：MD5
+签名 signature 的生成规则：由以下字段 apikey+apiSecret+usertoken+timestamp +requestBody 拼接成字符串，然
+后 MD5 加密（32 位小写）。
+注:按以下顺序进行拼接，字段中间无任何符号
+1.apikey: API 授权码，由我司 IT 分配
+2.apiSecret：API 秘钥，由我司 IT 分配
+3.usertoken：客户授权码，由我司 IT 分配
+4.timestamp：请求时间戳
+5.requestBody：请求体 body；
+例如：
+requestBody：{orderNo:”1234567890”}
+apikey: abcdefg
+apiSecret: 123
+usertoken: customer
+timestamp: 1587202455254
+拼接后的字符串为：abcdefg123customer1587202455254{orderNo:”1234567890”}
+MD5 加密后的字符串为：2bd1afcd6665cc6d0f9be685243d8633
+2.2 修改订单
+根据<客户订单号>查询订单。修改发货订单，可修改订单基础信息、发货信息、收货信息。
+目前不可修改信息：物流产品、运单号、尾程派送单号、包裹明细。
+tips: 可只传有变动的字段进行修改，未传或为 null 的字段保留系统的旧数据。
+接口名称：updateOrder
+请求类型：POST
+请求数据格式： 字段 类型 描述 默认值 必填
+Body 请求体 Y
+5/ 8
+customerOrderNo String(32) 客户订单号 Y
+parcelType Int(3) 包裹类型。取值范围[10:包裹/11:PAK 袋/12:文件] 10 N
+goodsCategory Int(3) 货物类别。取值范围[11:礼物/12:文件/13:商业样本
+/14:回货品/15:其他]
+15 N
+declareCurrency String(3) 申报币种。 USD N
+exportDeclareCurrency String(3) 出口申报币种 USD N
+insuredAmountD Double(10.3) 保险金额 N
+insuredCurrency String(3) 保险币种。默认 USD USD N
+codAmountD Double(10.3) COD 金额 N
+codCurrency String(3) COD 币种。默认 USD USD N
+taxPayMode Int(3) 税金支付方式,取值范围[10:DDU/11:DDP] N
+iossTaxType Int(3) IOSS 类 型 取 值 范 围
+[10:IOSS/20:NO-IOSS/30:Other]
+30 N
+iossNo String(32) IOSS 登记号 N
+eoriNo String(32) EORI 登记号 N
+vatNo String(32) VAT 税号/发件人税号 N
+vatCompanyEnName String(255) VAT 公司英文名 N
+vatRegisterCountry String(2) VAT 注册国家，国家二字简码 N
+vatRegisterAddress String(255) VAT 注册地址 N
+exporterName String(100) 出口商名称 N
+exporterTaxNo String(64) 出口商社会信用代码 N
+ecommercePlatformName String(100) 电商平台名称 N
+ecommercePlatformCode String(64) 电商平台代码 N
+salesUrl String(255) 销售 URL N
+customerRemark String(100) 备注 N
+shipper 发件信息 N
+shipperName String(64) 姓名 N
+shipperCompany String(64) 公司名称 N
+shipperCountry String(2) 国家二字简码 N
+shipperProvince String(32) 州/省 N
+shipperCity String(32) 城市 N
+shipperDistrict String(32) 区 N
+shipperAddress String(255) 地址 N
+shipperDoorplate String(32) 门牌号/建筑物名称 N
+shipperStreet String(32) 街道 N
+shipperPostcode String(32) 邮编 N
+shipperPhone String(20) 电话号码 N
+shipperEmail String(128) E-mail N
+consignee 收件信息 N
+consigneeName String(64) 姓名 N
+consigneeCompany String(64) 公司名称 N
+consigneeCountry String(2) 国家二字简码 N
+consigneeProvince String(32) 州/省 N
+6/ 8
+consigneeCity String(32) 城市 N
+consigneeDistrict String(32) 区 N
+consigneeAddress String(255) 地址 1 N
+consigneeAddress2 String(50) 地址 2。地址 2 只为了适应某些平台的要求，最终地址 2 会
+通过空格和地址 1 连接后合并保存。请确保地址 1 的最后一
+个单词不能拆开填到地址二中。如地址一最后一个单词为
+Street, 则不能将 Street 拆开分别填入地址 1 和地址 2 中。
+N
+consigneeDoorplate String(32) 门牌号/建筑物名称。如渠道无特殊要求，请不要填
+写此字段。
+备注：街道和门牌号将组合到地址中传输给代理接口。组合
+结构为：门牌号 + 空格 + 地址 + 空格 + 街道
+N
+consigneeStreet String(64) 街道。如渠道无特殊要求，请不要填写此字段。
+备注：街道和门牌号将组合到地址中传输给代理接口。组合
+结构为：门牌号 + 空格 + 地址 + 空格 + 街道
+N
+consigneePostcode String(32) 邮编 N
+consigneePhone String(30) 电话号码 N
+consigneeEmail String(128) E-mail N
+consigneeIdcard String(32) 身份证号码-收件人证件号码，如果使用的转运服务
+要求上传清关身份证信息
+N
+consigneeTaxNo String(32) 收件人税号 N
+orderDeclareList List 申报明细 N
+englishName String(64) 申报品名，一般都填英文品名 N
+chineseName String(100) 中文品名 N
+quantity Integer(10) 数量 0 N
+brand String(12) 品牌 无 N
+goodsBarcode String(32) 货物识别码，一般与商品条码对应 N
+unitNetWeightD Double(10.3) 单位净重（KG） 0 N
+unitDeclarePriceD Double(10.2) 申报单价 0 N
+exportUnitDeclarePriceD Double(10.2) 出口申报单价 0 N
+hsCode String(12) 海关编码 N
+productModel String(32) 产品型号 N
+material String(64) 产品材质 N
+purpose String(64) 产品用途 N
+sku String(32) SKU N
+pickingRemark String(512) 配货备注 N
+productUrl String(255) 商品 URL N
+origin String(2) 原产国，国家二字简码 N
+返回数据格式： 字段 类型 描述
+Body 响应体
+code String(10) 状态码。成功为 0，失败为对应的值。
+msg String(512) 成功为 success，失败为错误原因。
+7/ 8
+data 固定为 null
+请求 URL
+http://域名:端口/its-api/cs/api/updateOrder
+请求示例
+{
+"customerOrderNo":"OO000007", "taxPayMode":11, "parcelType":10, "goodsCategory":15, "declareCurrency":"RUB", "insuredAmountD":0, "insuredCurrency":"USD", "codAmountD":0, "codCurrency":"USD", "customerRemark":null, "salesUrl":null, "iossTaxType":30, "iossNo":"", "eoriNo":"", "vatNo":"", "vatCompanyEnName":"", "vatRegisterCountry":"", "vatRegisterAddress":"", "shipper":{
+"shipperName":"liu", "shipperCompany":"深圳市物流公司", "shipperPhone":"14356493467", "shipperEmail":"2442234@126.com", "shipperCountry":"CN", "shipperProvince":"广东", "shipperCity":"深圳", "shipperDistrict":"宝安", "shipperAddress":"神州一号 2 号门", "shipperPostcode":"518000", "shipperDoorplate":"77323", "shipperStreet":"宝安大道" },"consignee":{
+"consigneeName":"King Lee", "consigneeCompany":"深圳市互联通科技有限公司", "consigneePhone":"new12324", "consigneeEmail":"new@350c.com", "consigneeCountry":"US",
+"consigneeProvince":"OH", "consigneeCity":" MORAINE", "consigneeDistrict":"new", "consigneeAddress":"3155 ELBEE ", "consigneeAddress2":"RD", "consigneePostcode":"45439", "consigneeDoorplate":"new", "consigneeStreet":"new", "consigneeIdcard":"new", "consigneeTaxNo":"new" },"orderDeclareList":[
+{
+"chineseName":"玩具", "englishName":"TEST39324", "quantity":3, "unitNetWeightD":0.3, "unitDeclarePriceD":3, "brand":"ff", "goodsBarcode":"3312122", "sku":"kn34342", "hsCode":"12434562", "productModel":"小支庄", "material":"药", "purpose":"药用", "origin":"CN", "pickingRemark":"配货备注", "productUrl":"http://www.21cn.com" }
+]
+}
+成功响应示例
+{
+"code": 0, "msg": "success", "data": null
+}
+失败响应示例
+{
+"code":500, "msg":"客户订单号:OO000007 已经存在", "data":null
+}

@@ -1,0 +1,851 @@
+ITS 国际物流管理系统
+项目管理文档
+ITS-小包接口文档
+文档作者： 刘春明
+创建日期： 2020-04-18
+确认日期： 2020-06-10
+更新日期： 2026-03-05
+当前版本： 1.3.5
+2/ 38
+文档控制
+日期 作者 版本 参考版本 备注
+2020/4/18 刘春明 1.0 初版
+2022/3/31 刘春明 1.1 新增欧洲发件人税号
+2022/4/20 刘春明 1.1.1 修复例子的BUG
+2022/5/11 林俊财 1.1.2 新增获取轨迹接口
+2022/5/16 林俊财 1.1.3 订单接口新增收件人税号
+2022/6/6 刘春明 1.1.4 修改访问地址,加入 its-api前缀
+2022/8/5 刘春明 1.1.5 增加获取尾程派送单号接口
+2022/10/8 刘春明 1.1.6.1 删除packageCustomerNo字段
+2022/10/8 刘春明 1.1.6.2 删除用例中的orderId 和packageCustomerNo
+2022/10/08 刘春明 1.1.6.3 修改文档标题为 ITS-邮政小包接口文档
+2022/10/27 刘春明 1.1.7 增加获取报价接口
+2023/03/03 刘春明 1.1.7.1 修改获取尾程派送单号接口的说明
+2023/04/12 刘春明 1.1.7.2 1、创建订单新增运单号/物流商单号字段,用于中邮单号等场景
+2、创建订单新增尾程派送单号字段,用于线上物流
+2023/04/16 刘春明 1.1.7.3 新增取消预报接口
+2023/04/17 林俊财 1.1.7.4 获取轨迹增加非必传查询参数:单号类型，默认以派送单号查询
+2023/04/19 林俊财 1.1.7.5 查询尾程派送单号增加物流渠道类型和尾程面单URL返回
+2023/04/20 林俊财 1.1.7.6 添加订单查询接口
+2023/04/24 林俊财 1.1.7.7 创建订单收件人增加地址二字段
+2023/05/28 林俊财 1.1.7.7.1 修改收件人街道、地址、门牌号描述
+2023/06/19 林俊财 1.1.8 轨迹查询新增返回值,是否尾程供应商轨迹
+2023/08/08 刘春明 1.1.9 添加订单账单查询接口
+2024/07/17 刘春明 1.2.0 添加凭证打印接口
+2025/01/10 林俊财 1.2.1 获取报价新增申报金额和申报币种
+2025/02/14 刘春明 1.3 增加客户重量核对数据
+2025/02/25 King 1.3.1 创建订单新增渠道代码
+2025/04/07 King 1.3.2 新增预约提货单接口
+2025/09/25 刘春明 1.3.3 创建订单接口添加『出口商名称』和『出口商社会信用代码』字
+段
+2025/10/10 刘春明 1.3.4 创建订单接口添加『电商平台名称』、『电商平台代码』、【出
+口申报币种】和【出口申报单价】字段
+2025/10/30 king 1.3.4.1 修改获取尾成单号接口的返回参数和例子
+2026/03/05 king 1.3.5 修改收发件人的email长度为128
+3/ 38
+1 引言...........................................................................................................................................................................5
+1.1 编写目的.......................................................................................................................................................5
+1.2 项目背景.......................................................................................................................................................5
+2 API .............................................................................................................................................................................5
+2.1 获取账户 API 授权.....................................................................................................................................5
+2.1.1 获取授权码和密钥.............................................................................................................................5
+2.1.2 环境.................................................................................................................................................... 5
+2.1.3 系统级字段说明(每个接口方法都需传的 RequestHeader 参数)...............................................5
+2.1.4 加密签名............................................................................................................................................6
+2.2 创建并预报订单...........................................................................................................................................6
+2.3 获取运单打印标签地址.............................................................................................................................11
+2.4 获取所有运输方式/物流产品................................................................................................................... 13
+2.5 获取轨迹.....................................................................................................................................................14
+2.5.1 轨迹状态说明...........................................................................................................................................20
+2.6 获取尾程派送单号.................................................................................................................................... 21
+2.7 获取报价......................................................................................................................................................22
+2.8 取消预报.....................................................................................................................................................25
+2.9 查询订单信息............................................................................................................................................ 26
+2.10 订单账单查询接口....................................................................................................................................32
+2.11 打印凭证....................................................................................................................................................34
+2.12 增加客户重量核对...................................................................................................................................35
+2.13 增加预约提货单.......................................................................................................................................37
+4/ 38
+5/ 38
+1 引言
+1.1 编写目的
+该文档主要描述了物流系统的相关接口，提供给会员的开发人员和测试人员参考。
+1.2 项目背景
+为了方便有软件开发能力的的会员更便捷、快速的管理订单，特提供本接口。 2 API
+2.1 获取账户 API 授权
+2.1.1 获取授权码和密钥
+由 IT 同事分配对应开发的 apikey、appSecret 和 usertoken
+2.1.2 环境
+测试接口地址：http://域名:端口/its-api/cs/api/{方法名}
+生产接口地址：http://域名:端口/its-api/cs/api/{方法名}
+2.1.3 系统级字段说明(每个接口方法都需传的 RequestHeader 参数)
+RequestHeader 请求头
+属性 类型 描述 必填
+apikey String API 授权码，通过物流公司运营获取 Y
+6/ 38
+signature String 签名 必填，根据加密规则生成 Y
+timestamp String 请求时间戳,精确到秒。10 位数字 Y
+usertoken String 客户唯一标识，可以从 OMS 的系统设置-系统对接 中获取 Y
+Content-Type String 固定为: application/json;charset=UTF-8 Y
+2.1.4 加密签名
+加密方式：MD5
+签名 signature 的生成规则：由以下字段 apikey+apiSecret+usertoken+timestamp +requestBody 拼接成字符串，然后
+MD5 加密（32 位小写）。
+注:按以下顺序进行拼接，字段中间无任何符号
+1.apikey: API 授权码，由我司 IT 分配
+2.apiSecret：API 秘钥，由我司 IT 分配
+3.usertoken：客户授权码，由我司 IT 分配
+4.timestamp：请求时间戳
+5.requestBody：请求体 body；
+例如：
+requestBody：{orderNo:”1234567890”}
+apikey: abcdefg
+apiSecret: 123
+usertoken: customer
+timestamp: 1587202455254
+拼接后的字符串为：abcdefg123customer1587202455254{orderNo:”1234567890”}
+MD5 加密后的字符串为：2bd1afcd6665cc6d0f9be685243d8633
+2.2 创建并预报订单
+创建并预报发货订单，获取服务商跟踪号、尾程派送单号(如有)。多次重复预报，系统会做幂等处理，返回上次一次已经成
+功的单号。如系统中已经存在相同的客户单号，并且对应的订单在草稿状态，则创建并预报订单时，会将原先系统中存在的
+订单删除并根据新的预报信息产生新的订单。
+接口名称：createOrder
+请求类型：POST
+请求数据格式：
+字段 类型 描述 默认值 必填
+Body 请求体 Y
+customerOrderNo String(32) 客户订单号 Y
+logisticsProductCode String(32) 运输方式代码/物流产品代码 Y
+logisticsChannelCode String(10) 物流渠道代码，仅适用于预报时即刻获取尾程单号
+的物流产品。若指定渠道代码，则系统后台按指定
+N
+7/ 38
+渠道代码进行预报。该渠道代码由物流公司提供
+waybillNo String(36) 运单号/物流商单号。用于中邮 AS 单号等场景
+1.17.2 版本更新。需要 ITS 运营人员在物流产品中设
+置-单号来源中设置才允许使用。
+N
+deliveryNo String(36) 尾程派送单号。用于平台线上物流 1.17.2版本更新。
+需要 ITS 系统运营人员在物流渠道中-单号来源中
+设置才允许使用。
+N
+parcelType Int(3) 包裹类型。取值范围[10:包裹/11:PAK 袋/12:文件] 10 Y
+goodsCategory Int(3) 货物类别。取值范围[11:礼物/12:文件/13:商业样本
+/14:回货品/15:其他]
+15 N
+declareCurrency String(3) 申报币种。 USD N
+exportDeclareCurrency String(3) 出口申报币种 USD N
+insuredAmountD Double(10.3) 保险金额 N
+insuredCurrency String(3) 保险币种。默认 USD USD N
+codAmountD Double(10.3) COD 金额 N
+codCurrency String(3) COD 币种。默认 USD USD N
+taxPayMode Int(3) 税金支付方式,取值范围[10:DDU/11:DDP] Y
+iossTaxType Int(3) IOSS 类 型 取 值 范 围
+[10:IOSS/20:NO-IOSS/30:Other]
+30 N
+iossNo String(32) IOSS 登记号 N
+eoriNo String(32) EORI 登记号 N
+vatNo String(32) VAT 税号/发件人税号 N
+vatCompanyEnName String(255) VAT 公司英文名 N
+vatRegisterCountry String(2) VAT 注册国家，国家二字简码 N
+vatRegisterAddress String(255) VAT 注册地址 N
+exporterName String(100) 出口商名称 N
+exporterTaxNo String(64) 出口商社会信用代码 N
+ecommercePlatformName String(100) 电商平台名称 N
+ecommercePlatformCode String(64) 电商平台代码 N
+salesUrl String(255) 销售 URL N
+customerRemark String(100) 备注 N
+shipper 发件信息 N
+shipperName String(64) 姓名 Y
+shipperCompany String(64) 公司名称 N
+shipperCountry String(2) 国家二字简码 Y
+shipperProvince String(32) 州/省 Y
+shipperCity String(32) 城市 Y
+shipperDistrict String(32) 区 N
+shipperAddress String(255) 地址 Y
+shipperDoorplate String(32) 门牌号/建筑物名称 N
+shipperStreet String(32) 街道 N
+shipperPostcode String(32) 邮编 N
+shipperPhone String(20) 电话号码 Y
+8/ 38
+shipperEmail String(128) E-mail N
+consignee 收件信息 Y
+consigneeName String(64) 姓名 Y
+consigneeCompany String(64) 公司名称 N
+consigneeCountry String(2) 国家二字简码 Y
+consigneeProvince String(32) 州/省 Y
+consigneeCity String(32) 城市 Y
+consigneeDistrict String(32) 区 N
+consigneeAddress String(255) 地址 1 Y
+consigneeAddress2 String(50) 地址 2。地址 2 只为了适应某些平台的要求，最终地址 2 会
+通过空格和地址 1 连接后合并保存。请确保地址 1 的最后一个
+单词不能拆开填到地址二中。如地址一最后一个单词为
+Street, 则不能将 Street 拆开分别填入地址 1 和地址 2 中。
+N
+consigneeDoorplate String(32) 门牌号/建筑物名称。如渠道无特殊要求，请不要填
+写此字段。
+备注：街道和门牌号将组合到地址中传输给代理接口。组合
+结构为：门牌号 + 空格 + 地址 + 空格 + 街道
+N
+consigneeStreet String(64) 街道。如渠道无特殊要求，请不要填写此字段。
+备注：街道和门牌号将组合到地址中传输给代理接口。组合
+结构为：门牌号 + 空格 + 地址 + 空格 + 街道
+N
+consigneePostcode String(32) 邮编 N
+consigneePhone String(30) 电话号码 N
+consigneeEmail String(128) E-mail N
+consigneeIdcard String(32) 身份证号码-收件人证件号码，如果使用的转运服务
+要求上传清关身份证信息
+N
+consigneeTaxNo String(32) 收件人税号 N
+orderDeclareList List 申报明细 Y
+englishName String(64) 申报品名，一般都填英文品名 Y
+chineseName String(100) 中文品名 Y
+quantity Integer(10) 数量 0 Y
+brand String(12) 品牌 无 N
+goodsBarcode String(32) 货物识别码，一般与商品条码对应 N
+unitNetWeightD Double(10.3) 单位净重（KG） 0 Y
+unitDeclarePriceD Double(10.2) 申报单价 0 Y
+exportUnitDeclarePriceD Double(10.2) 出口申报单价 0 N
+hsCode String(12) 海关编码 N
+productModel String(32) 产品型号 N
+material String(64) 产品材质 N
+purpose String(64) 产品用途 N
+sku String(32) SKU N
+pickingRemark String(512) 配货备注 N
+productUrl String(255) 商品 URL N
+origin String(2) 原产国，国家二字简码 N
+9/ 38
+packageList List 包裹明细 Y
+packageLengthD Double(10.1) 长（CM） 0 Y
+packageWidthD Double(10.1) 宽（CM） 0 Y
+packageHeightD Double(10.1) 高（CM） 0 Y
+packageWeightD Double(10.3) 重量（KG） 0 Y
+返回数据格式：
+字段 类型 描述
+Body 响应体
+code String(10) 状态码。成功为 0，失败为对应的值。
+msg String(512) 成功为 success，失败为错误原因。
+data
+customerOrderNo String(32) 客户订单号
+waybillNo String() 运单号/物流商单号
+deliveryNo String(32) 尾程派送单号
+labelUrl String(255) 此字段始终返回 null 或者空字符串，获取面单通过该文档的 2.3 获取运单打印标
+签地址 接口获取
+请求 URL
+http://域名:端口/its-api/cs/api/createOrder
+请求示例
+{ "customerOrderNo":"OO000007", "logisticsProductCode":"LP00004501", "taxPayMode":11, "parcelType":10, "goodsCategory":15, "declareCurrency":"RUB", "insuredAmountD":0, "insuredCurrency":"USD", "codAmountD":0, "codCurrency":"USD", "customerRemark":null, "salesUrl":null, "iossTaxType":30, "iossNo":"", "eoriNo":"", "vatNo":"", "vatCompanyEnName":"", "vatRegisterCountry":"",
+"vatRegisterAddress":"", "shipper":{ "shipperName":"liu", "shipperCompany":"深圳市物流公司", "shipperPhone":"14356493467", "shipperEmail":"2442234@126.com", "shipperCountry":"CN", "shipperProvince":"广东", "shipperCity":"深圳", "shipperDistrict":"宝安", "shipperAddress":"神州一号 2 号门", "shipperPostcode":"518000", "shipperDoorplate":"77323", "shipperStreet":"宝安大道"
+},"consignee":{ "consigneeName":"King Lee", "consigneeCompany":"深圳市互联通科技有限公司", "consigneePhone":"new12324", "consigneeEmail":"new@350c.com", "consigneeCountry":"US", "consigneeProvince":"OH", "consigneeCity":" MORAINE", "consigneeDistrict":"new", "consigneeAddress":"3155 ELBEE ", "consigneeAddress2":"RD", "consigneePostcode":"45439", "consigneeDoorplate":"new", "consigneeStreet":"new", "consigneeIdcard":"new", "consigneeTaxNo":"new"
+},"packageList":[
+{ "packageWeightD":2, "packageLengthD":1, "packageWidthD":1, "packageHeightD":1
+}
+],"orderDeclareList":[
+{ "chineseName":"玩具", "englishName":"TEST39324", 10/ 38
+"quantity":3, "unitNetWeightD":0.3, "unitDeclarePriceD":3, "brand":"ff", "goodsBarcode":"3312122", "sku":"kn34342", "hsCode":"12434562", "productModel":"小支庄", "material":"药", "purpose":"药用", "origin":"CN", "pickingRemark":"配货备注", "productUrl":"http://www.21cn.com"
+}
+]
+}
+成功响应示例
+{ "code": 0, "msg": "success", "data": { "customerOrderNo": "OO000007", "waybillNo": "BTY00000000397CN", "deliveryNo": "C210360", "labelUrl": null
+}
+}
+失败响应示例
+{ "code":500, "msg":"客户订单号:OO000007 已经存在", "data":null
+}
+2.3 获取运单打印标签地址
+通过客户单号或者运单号获取运单打印标签地址。查询逻辑，先根据客户单号查询，查询不到再根据运单号进行查询。
+接口名称：label
+请求类型：POST
+请求数据格式：
+11/ 38
+12/ 38
+字段 类型 描述 默认值 必填
+Body 请求体
+mergePdf int 多个 pdf 是否合并为一个。0:否。1:是。目前版本固定为 1 Y
+nos List 客户单号列表或运单号列表，二选一。目版本只支持 1 个单号请
+求，如果是多个单号请求，则只返回最后一个单号的面单。
+Y
+返回数据格式：
+字段 类型 描述
+Body 响应体
+code Int 状态码。成功为 0，失败为对应的值。
+msg String 成功为 success，失败为错误原因。
+data Object 始终为 null
+labelUrl String 若合并面单，则从此处取值。
+如果物流产品设置的是下单时获取尾程单号，则该面单为尾程面单
+如果物流产品设置的是入仓后获取尾程单号，则该面单为中性面单
+labelList list 始终为 null
+请求 URL
+http://域名:端口/its-api/cs/api/label
+请求示例
+{"mergePdf":1,"nos":["HLT20200426002"]}
+成功响应示例
+{ "code": 0, "msg": "success", "data": null, "labelUrl": "https://its-dev.oss-cn-shenzhen.aliyuncs.com/20200513/c02b1194185545cdb7638e205412da46.pdf", "labelList": null
+}
+失败响应示例
+{ "code": 200006020, "msg": "无可打印面单", "data": null, "labelUrl": null,
+13/ 38
+"labelList": null
+}
+2.4 获取所有运输方式/物流产品
+获取所有运输方式。 注意，本接口的签名 requestBody 为空字符串”” 接口名称：getLogistics
+请求类型：POST
+返回数据格式：
+字段 类型 描述
+Body 响应体
+code Int 状态码。成功为 0，失败为对应的值。
+Msg String(512) 成功为 success，失败为错误原因。
+data List 运输方式列表。若失败为空。
+code String(32) 运输方式代码
+name String(64) 运输方式名称
+请求 URL
+http://域名:端口/its-api/cs/api/getLogistics
+请求示例
+{}
+成功响应示例
+{ "code": 0, "msg": "success", "data": [
+{ "code": "LP00000079", "name": "ups 红单"
+},{ "code": "LP00000080", "name": "日本专线"
+},{ "code": "LP00000091", "name": "顺丰特快"
+}
+]
+}
+14/ 38
+失败响应示例
+{ "code": 500, "msg": "客户认证失败", "data": null
+}
+2.5 获取轨迹
+查询派送单号的轨迹。
+接口名称：queryTrack
+请求类型：POST
+请求参数：
+返回数据格式：
+字段 类型 描述
+Body 响应体
+code Int 状态码。成功为 0，失败为对应的值。
+msg String(512) 成功为 success，失败为错误原因。
+data (对应一个对象或对象数组)
+number String(36) 查询的单号
+oriNumber String(36) 原始渠道的派送单号
+oriChannel String(10) 原始渠道标识
+oriCountry String(2) 发件国家,标准 2 字码
+destCountry String(2) 收件国家,标准 2 字码
+lastStatus String(16) 轨迹当前的状态值
+events event[] 事件数组
+event
+字段 类型 描述
+默认值 必填
+Body 请求体
+nos String 单号（多个请用逗号隔开，只取前 100 个单号） Y
+noType Int 单号类型: 1=运单号，2=尾程派送单号，4=客户单号，8=邮政单号
+不传则以派送单号查询
+2 N
+15/ 38
+time String(19) 事件时间
+timeZone String(12) 时区，格式如-06:00
+eventCountry String(2) 事件所在国家二字码
+eventProvince String(32) 事件所在省/州
+eventCity String(64) 事件所在城市
+eventZipCode String(32) 事件所在地邮编
+flightNo String(32) 事件发生的航班号
+location String(64) 事件地点（可为空或国家，城市等信息）
+content String(512) 事件描述
+fromLastMile Int 是否尾程供应商轨迹。0:否/1:是 1.1.8 版本新增
+status String(16) 操作节点信息值
+3 请求示例：
+注意事项
+同时一次请求的单号最多支持 100 个，超过时只取前 100 个。 请求 URL
+http://域名:端口/its-api/cs/api/queryTrack
+示例 1
+请求示例
+{"nos":"LPQQ0000002273CN", "noType": 1 }
+成功响应示例
+{ "code": 0, "msg": "success", "data": { "number": "fba-04-20-a1", "oriNumber": "9400136206203392727396", "destCountry": "US", "oriCountry": "CN", "oriChannel": "LC00005857", "lastStatus": "E01", "events": [
+{ "eventCity": "MANSFIELD", "flightNo": null,
+"eventCountry": null, "eventZipCode": "44907", "eventProvince": "OH", "timeZone": "-04:00", "location": "MANSFIELD,OH 44907", "time": "2023-04-17 12:25:00", "content": "MANSFIELD,OH 44907, Delivered, In/At Mailbox, Your item was delivered in or at the
+mailbox at 12:25 pm on April 17, 2023 in MANSFIELD, OH 44907.", "fromLastMile"：0，
+"status": "E01"
+},{ "eventCity": "MANSFIELD", "flightNo": null, "eventCountry": null, "eventZipCode": "44907", "eventProvince": "OH", "timeZone": "-04:00", "location": "MANSFIELD,OH 44907", "time": "2023-04-17 06:10:00", "content": "MANSFIELD,OH 44907, Out for Delivery", "status": "G03"
+},{ "eventCity": "MANSFIELD", "flightNo": null, "eventCountry": null, "eventZipCode": "44901", "eventProvince": "OH", "timeZone": "-04:00", "location": "MANSFIELD,OH 44901", "time": "2023-04-17 03:48:00", "content": "MANSFIELD,OH 44901, Arrived at Post Office", "fromLastMile"：0，
+"status": "G01"
+},{ "eventCity": null, "flightNo": null, "eventCountry": null, "eventZipCode": null, "eventProvince": null, "timeZone": "-08:00", "location": null, 16/ 38
+"time": "2023-02-20 20:22:20", "content": "Shipment information received", "fromLastMile"：0，
+"status": "A01"
+}
+]
+}
+}
+示例 2
+{"nos": "LPQQ0000002273CN,LPQQ0000002291CN"}
+成功响应示例
+{"code":"0", "msg":"成功", "data":[
+{ "number":"LPQQ0000002273CN", "oriNumber":"XYY00454", "destCountry":"US", "oriCountry":"CN", "oriChannel":"LC00005217", "lastStatus":"A06", "events":[
+{ "location":"深圳市", "time":"2022-05-11T21:00:56+08:00", "content":"Departed from sorting center", "timeZone": "-08:00", "eventCity": null, "flightNo": null, "eventCountry": null, "eventZipCode": null, "eventProvince": null, "fromLastMile"：0，
+"status":"A06"
+},{ "location":"深圳市", "time":"2022-05-11T20:57:39+08:00", "content":"Shipment inbound in sorting center", "timeZone": "-08:00", "eventCity": null, 17/ 38
+"flightNo": null, "eventCountry": null, "eventZipCode": null, "eventProvince": null, "fromLastMile"：0，
+"status":" A05"
+},{ "location":null, "time":"2022-05-10T20:12:57+08:00", "content":"Shipment information received", "timeZone": "-08:00", "eventCity": null, "flightNo": null, "eventCountry": null, "eventZipCode": null, "eventProvince": null, "fromLastMile"：0，
+"status":"A01"
+}
+]
+},{ "number":"LPQQ0000002291CN", "oriNumber":"XYY00447", "destCountry":"US", "oriCountry":"CN", "oriChannel":"LC00005217", "lastStatus":"A06", "events":[
+{ "location":null, "time":"2022-05-10T21:37:48+08:00", "content":"Departed from sorting center", "timeZone": "-08:00", "eventCity": null, "flightNo": null, "eventCountry": null, "eventZipCode": null, "eventProvince": null, "fromLastMile"：0，
+"status":"A06"
+},{
+18/ 38
+"location":null, "time":"2022-05-10T21:35:12+08:00", "content":"Shipment inbound in sorting center", "timeZone": "-08:00", "eventCity": null, "flightNo": null, "eventCountry": null, "eventZipCode": null, "eventProvince": null, "fromLastMile"：0，
+"status":"A05"
+},{ "location":null, "time":"2022-05-10T20:12:57+08:00", "content":"Shipment information received", "timeZone": "-08:00", "eventCity": null, "flightNo": null, "eventCountry": null, "eventZipCode": null, "eventProvince": null, "fromLastMile"：0，
+"status":"A01"
+}
+]
+}
+]
+}
+失败响应示例
+示例 1
+{ "code": “500”, " msg ":"认证失败"
+}
+示例 2
+{ "code": “500”, " msg ":"请求参数不能为空"
+}
+19/ 38
+20/ 38
+示例 3
+{ "code": “500”, " msg ":"请求频率过高，请稍后再试"
+}
+示例 4
+{ "status": “500”, "msg":"查无此单号"
+}
+2.5.1 轨迹状态说明
+状态值 状态描述
+A01 订单信息已收到
+A02 订单已取消
+A03 包裹已收到
+A04 货物发往分拣中心
+A05 分拣中心已入库
+A06 包裹离开分拣中心
+A07 包裹已退回分拣中心
+A08 货物已退回网点
+A09 已退回客户
+B01 国内中转运输
+C01 出口报关中
+C02 出口清关失败
+C03 出口清关完成
+D01 离开起运地机场/港口
+D02 货件交航空公司
+D03 到达目的国机场/港口
+E01 海关扣件
+E02 海关扣件-需要收件人确认关税
+E03 海关扣件-需要有效税号
+E04 海关扣件-等候检查检疫
+E05 海关扣件-等候海关放行
+E06 海关扣件-需要收件人信息
+E07 目的国清关中
+E08 目的国清关完成
+F01 目的国中转
+G01 派送中
+21/ 38
+G02 地址错误
+G03 到达待取
+G04 投递失败
+G05 退件
+G06 丢失
+G07 其他异常
+G99 客户已签收
+2.6 获取尾程派送单号
+根据运单号或者客户单号获取尾程派送单号、尾程服务商信息、尾程面单信息。查询逻辑，先根据客户单号查询，查询不到
+再根据运单号进行查询。
+注意事项：由于验签需要获取请求的 body，所以需要在请求体中也需要把单号放进去，否则会验签失败。
+URL 路径中的单号必须和 body 的单号一致。
+接口名称：getTrackingNumber/{no}
+请求类型：POST
+请求参数：
+返回数据格式：
+字段 类型 描述
+Body 响应体
+code Int 状态码。成功为 0，失败为对应的值。
+Msg String(512) 成功为 success，失败为错误原因。
+data List 运输方式列表。若失败为空。
+id Long ITS 系统的订单编号
+customerOrderNo String 客户单号
+waybillNo String 物流商运单号
+deliveryNo String 尾程派送单号,如果是一票多箱的订单,这个代表主派送单号
+channelType String 渠道类型。如：USP、USPS、FEDEX、DHL 等
+LabelUrl String 尾程面单 URL。如物流商禁止尾程派送单号返回，则该项为空。
+postalTrackingNo String 邮政单号，AB 单中的 A 单号。由系统物流产品设置决定，并不是所有的物流产品
+都返回该单号。
+packages 一票多箱的箱信息，集合类型。小包接口,该值始终为 null
+subDeliveryNo String(36) 子派送单号
+类型 描述
+Body 请求体
+String 单个客户单号或者运单号
+22/ 38
+packageNo String(36) 客户箱号/FBA 唛头号
+请求 URL
+http://域名:端口/its-api/cs/api/getTrackingNumber/{客户单号或物流公司运单号}
+请求示例
+请求路径：http://域名:端口/its-api/cs/api/getTrackingNumber/LPQQ0000005691CN
+请求 Body：LPQQ0000005691CN
+成功响应示例一
+{ "code": 0, "msg": "success", "data": { "id": "1648919351931781122", "customerOrderNo": "KK0000002", "waybillNo": "IT00000306", "deliveryNo": "I32234234229628", "postalTrackingNo": "PG2530117838921175", "channelType": "USPS", "labelUrl": "http://localhost:8080/files/20230420/20dbfcd35af74e8eae163e0ef1ece401.pdf", "packages": null
+}
+}
+失败响应示例一
+{ "code": 500, "msg": "客户认证失败", "data": null
+}
+失败响应示例二
+{ "code": 10019, "msg": "无对应订单信息", "data": null
+}
+2.7 获取报价
+使用订单信息获取报价。
+23/ 38
+接口名称：getTransSum
+请求类型：POST
+请求数据格式：
+字段 类型 描述 默认值 必填
+Body 请求体 Y
+logisticsProductCode String(32) 运输方式(物流产品)代码 Y
+parcelType Int(3) 包裹类型。取值范围[10:包裹/11:PAK 袋/12:文件] 10 N
+declareCurrency String(3) 申报币种 1.2.1 版本新增 N
+declareSumD Double(10.3) 申报金额 1.2.1 版本新增 N
+consignee consignee 收件人信息对象 Y
+packageList package 数组 包裹明细数组 Y
+consignee 收件信息
+consigneeCountry String(2) 国家二字简码 Y
+consigneeProvince String(32) 州/省 Y
+consigneeCity String(32) 城市 Y
+consigneeDistrict String(32) 区 N
+consigneeAddress String(255) 详细地址 Y
+consigneePostcode String(32) 邮编 Y
+package 包裹明细
+packageLengthD Double(10.1) 长（CM） 0 N
+packageWidthD Double(10.1) 宽（CM） 0 N
+packageHeightD Double(10.1) 高（CM） 0 N
+packageWeightD Double(10.3) 重量（KG） 1 Y
+返回数据格式：
+字段 类型 描述
+Body 响应体
+code Int 状态码。成功为 0，失败为对应的值。
+Msg String(512) 成功为 success，失败为错误原因。
+data Object
+totalSum Double 总费用
+currency String 币种。三位编码形式
+balanceWeight Double 结算重
+weightUnit String 结算重单位。G/KG/LB/OZ
+feeList fee 数组 费用项数组
+fee 费用项
+24/ 38
+请求 URL
+http://域名:端口/its-api/cs/api/getTransSum
+请求示例
+{ "logisticsProductCode": "LP00004488", "parcelType": 10, "declareCurrency": "USD", "declareSumD": 3.412, "consignee": { "consigneeName": "bob", "consigneeCompany": null, "consigneePhone": "14343423", "consigneeEmail": null, "consigneeCountry": "US", "consigneeProvince": "OHOH", "consigneeCity": " MORAINE", "consigneeDistrict": null, "consigneeAddress": "3155 ELBEE RD", "consigneePostcode": "45439", "consigneeDoorplate": null, "consigneeStreet": null, "consigneeIdcard": null, "consigneeTaxNo": null
+},"packageList": [
+{ "packageWeightD": 10
+}
+]
+}
+成功响应示例
+{ "code":0, "msg":"success", "data":{ "totalSum":247, "currency":"USD", "balanceWeight":10, "weightUnit":"KG",
+feeName String 费用名称
+sum Double(10.3) 金额
+25/ 38
+"feeList":[
+{ "feeName":"运费", "sum":247
+}
+]
+}
+}
+失败响应示例
+{ "code": 500, "msg": "【尾程渠道：该重量[200.0]分区[4]没有对应报价,请联系管理员】", "data": null
+}
+2.8 取消预报
+使用客户单号取消预报，对于取消过的订单此处会幂等处理。
+接口名称：cancelOrder
+请求类型：POST
+请求数据格式：
+字段 类型 描述 默认值 必填
+Body 请求体 Y
+customerOrderNo String(32) 客户单号 Y
+返回数据格式：
+字段 类型 描述
+Body 响应体
+code Int 状态码。成功为 0，失败为对应的值。
+Msg String(512) 成功为 success，失败为错误原因。
+data Object
+始终为 null
+请求 URL
+http://域名:端口/its-api/cs/api/cancelOrder
+请求示例
+26/ 38
+{"customerOrderNo":"UU903882345"}
+成功响应示例
+{ "code": 0, "msg": "success", "data": null
+}
+失败响应示例
+{ "code": 500, "msg": "订单:UU903882345,不是预报状态", "data": null
+}
+2.9 查询订单信息
+根据客户单号查询订单信息，返回订单的收/发件人信息、申报信息。
+接口名称：getOrderInfo
+请求类型：POST
+请求数据格式：
+字段 类型 描述 默认值 必填
+Body 请求体 Y
+customerOrderNo String(32) 客户单号 Y
+返回数据格式：
+字段 类型 描述
+Body 响应体
+code Int 状态码。成功为 0，失败为对应的值。
+Msg String(512) 成功为 success，失败为错误原因。
+data Object
+customerOrderNo String(32) 客户订单号
+logisticsProductCode String(32) 运输方式代码/物流产品代码
+waybillNo String(36) 运单号/物流商单号
+27/ 38
+deliveryNo String(36) 尾程派送单号
+parcelType Int(3) 包裹类型
+取值范围[10:包裹/11:PAK 袋/12:文件]
+goodsCategory Int(3) 货物类别
+取值范围[11:礼物/12:文件/13:商业样
+本/14:回货品/15:其他]
+declareCurrency String(3) 申报币种。
+insuredAmountD Double(10.3) 保险金额
+insuredCurrency String(3) 保险币种
+codAmountD Double(10.3) COD 金额
+codCurrency String(3) COD 币种
+taxPayMode Int(3) 税金支付方式
+取值范围[10:DDU/11:DDP]
+iossTaxType Int(3) IOSS 类型
+取值范围
+[10:IOSS/20:NO-IOSS/30:Other]
+iossNo String(32) IOSS 登记号
+eoriNo String(32) EORI 登记号
+vatNo String(32) VAT 税号/发件人税号
+vatCompanyEnName String(255) VAT 公司英文名
+vatRegisterCountry String(2) VAT 注册国家，国家二字简码
+vatRegisterAddress String(255) VAT 注册地址
+salesUrl String(255) 销售 URL
+customerRemark String(100) 备注
+shipper 发件信息
+shipperName String(64) 姓名
+shipperCompany String(64) 公司名称
+shipperCountry String(2) 国家二字简码
+shipperProvince String(32) 州/省
+shipperCity String(32) 城市
+shipperDistrict String(32) 区
+shipperAddress String(255) 地址
+shipperDoorplate String(32) 门牌号/建筑物名称
+shipperStreet String(32) 街道
+shipperPostcode String(32) 邮编
+shipperPhone String(20) 电话号码
+shipperEmail String(20) E-mail
+consignee 收件信息
+consigneeName String(64) 姓名
+consigneeCompany String(64) 公司名称
+consigneeCountry String(2) 国家二字简码
+consigneeProvince String(32) 州/省
+consigneeCity String(32) 城市
+28/ 38
+consigneeDistrict String(32) 区
+consigneeAddress String(255) 地址
+consigneeDoorplate String(32) 门牌号/建筑物名称
+consigneeStreet String(64) 街道
+consigneePostcode String(32) 邮编
+consigneePhone String(30) 电话号码
+consigneeEmail String(64) E-mail
+consigneeIdcard String(32) 身份证号码-收件人证件号码
+consigneeTaxNo String(32) 收件人税号
+orderDeclareList List 申报明细
+englishName String(64) 申报品名
+chineseName String(100) 中文品名
+quantity Integer(10) 数量
+brand String(12) 品牌
+goodsBarcode String(32) 货物条码
+unitNetWeightD Double(10.3) 单位净重（KG）
+unitDeclarePriceD Double(10.2) 申报单价
+hsCode String(12) 海关编码
+productModel String(32) 产品型号
+material String(64) 产品材质
+purpose String(64) 产品用途
+sku String(32) SKU
+pickingRemark String(512) 配货备注
+productUrl String(255) 商品 URL
+origin String(2) 原产国，国家二字简码
+packageList List 包裹明细
+packageLengthD Double(10.1) 长（CM）
+packageWidthD Double(10.1) 宽（CM）
+packageHeightD Double(10.1) 高（CM）
+packageWeightD Double(10.3) 重量（KG）
+asynNoStatus Object 异步单号获取状态
+status Int(3) 获取状态。0:未获取、10:获取中、20:
+已获取、30:获取失败
+msg String 描述
+请求 URL
+http://域名:端口/its-api/cs/api/getOrderInfo
+请求示例
+{"customerOrderNo":"T314344-09831"}
+成功响应示例
+{ "code":0, "msg":"success", "data":{ "customerOrderNo":"T314344-09831", "waybillNo":"453_534323432", "deliveryNo":"ITM00000044", "shopName":null, "logisticsProductCode":"LP00004376", "taxPayMode":11, "taxPayAccount":null, "iossTaxType":null, "iossNo":null, "eoriNo":null, "vatNo":null, "vatCompanyEnName":null, "vatRegisterCountry":null, "vatRegisterAddress":null, "parcelType":10, "goodsCategory":15, "electric":0, "declareCurrency":"USD", "insuredAmountD":0, "insuredCurrency":"USD", "codAmountD":0, "codCurrency":"USD", "customerRemark":null, "platformType":"自有系统", "salesUrl":null, "shipper":{ "id":"1647572484052500483", "creator":"1261126338524643329", "createDate":"2023-04-16 20:07:46", "shipperName":"liu", "shipperCompany":"深圳市物流公司", "shipperPhone":"14356493467", "shipperEmail":"2442234@126.com", "shipperCountry":"CN", "shipperProvince":"广东", "shipperCity":"深圳", 29/ 38
+"shipperDistrict":"宝安", "shipperAddress":"神州一号 2 号门", "shipperPostcode":"518000", "shipperDoorplate":null, "shipperStreet":null, "shipperCountryCn":null, "shipperCountryEn":null, "iossTaxType":30, "iossNo":"", "eoriNo":"", "vatNo":"", "vatCompanyEnName":"", "vatRegisterCountry":"", "vatRegisterAddress":"", "waybillId":null
+},"consignee":{ "id":"1647572484052500483", "creator":"1261126338524643329", "createDate":"2023-04-16 20:07:46", "consigneeName":"King Lee", "fbaWarehouseCode":null, "consigneeCompany":"深圳市互联通科技有限公司", "consigneePhone":"new12324", "consigneeEmail":"new@350c.com", "consigneeCountry":"US", "consigneeProvince":"OH", "consigneeCity":"MORAINE", "consigneeDistrict":"new", "consigneeAddress":"3155 ELBEE RD", "consigneePostcode":"45439", "consigneeDoorplate":"new", "consigneeStreet":"new", "consigneeIdcard":"new", "consigneeTaxNo":"new", "consigneeCountryCn":null, "consigneeCountryEn":null, "consigneeFullAddress":null, "consigneeFullAddressReverse":null, "waybillId":null
+},"packageList":[
+{ "companyId":"1260957299563200514", 30/ 38
+"id":"1647572484052500484", "comInSubWaybillId":null, "mergedOrderPackageId":null, "creator":"1261126338524643329", "createDate":"2023-04-16 20:07:46", "orderId":"1647572484052500483", "packageSerialNo":1, "packageDeliveryNo":"ITM00000044", "subCustomerOrderNo":null, "masterDeliveryNo":null, "packageCustomerNo":"OI1647572484052500483", "packageWeightD":2, "packageWeight":"20000", "packageLengthD":1, "packageLength":10, "packageWidthD":1, "packageWidth":10, "packageHeightD":1, "packageHeight":10, "channelLabelUrl":null, "packageType":null, "packageQty":null, "orderLogisticsTypeEnum":null, "coOrderTypeEnum":null, "allSerialNo":null, "curAllPackageIdSerialNoBoxNoMap":null
+}
+],"orderDeclareList":[
+{ "id":"1647572485231099905", "creator":"1261126338524643329", "createDate":"2023-04-16 20:07:46", "orderId":"1647572484052500483", "packageCustomerNo":"OI1647572484052500483", "declareUnit":10, "chineseName":"玩具", "englishName":"TEST39324", "quantity":3, "unitNetWeightD":0.3, "unitNetWeight":"3000", "unitDeclarePriceD":3, "unitDeclarePrice":"3000", "brand":"ff", 31/ 38
+32/ 38
+"goodsBarcode":"3312122", "sku":"kn34342", "hsCode":"12434562", "productModel":"", "material":"df", "purpose":"", "origin":"CN", "pickingRemark":"", "productUrl":"", "picUrl":null, "picBase64":null, "waybillId":null
+}
+],"asynNoStatus":{ "status":20, "msg":"已获取"
+}
+}
+}
+失败响应示例
+{ "code": 13023, "msg": "单号不能为空", "data": null
+}
+2.10 订单账单查询接口
+使用订单信息获取已审核的金额信息。
+接口名称：getBill
+请求类型：POST
+请求数据格式：
+字段 类型 描述 默认值 必填
+Body 请求体 Y
+customerOrderNo String(32) 客户单号。客户单号和派送单号二选一 N
+deliveryNo String(32) 派送单号。客户单号和派送单号二选一 N
+33/ 38
+返回数据格式：
+字段 类型 描述
+Body 响应体
+code Int 状态码。成功为 0，失败为对应的值。
+Msg String(512) 成功为 success，失败为错误原因。
+data Object
+totalSum Double 总费用。（若存在多币种，将取入库时的汇率，换算为人民币金额）
+currency String 币种。三位编码形式。
+balanceWeight Double 结算重
+weightUnit String 结算重单位。默认千克
+zone String 分区
+feeList fee 数组 费用项数组
+请求 URL
+http://域名:端口/its-api/cs/api/getBill
+请求示例
+{ "customerOrderNo": "KK20230718002"
+}
+成功响应示例
+{ "code": 0, "msg": "success", "data": { "totalSum": 20.0, "currency": "USD", "balanceWeight": 1.2, "weightUnit": "千克", "zone": "1", "feeList": [
+{ "currency": "USD", "feeName": "操作费", "sum": 10.0
+fee 费用项
+feeName String 费用名称
+sum Double(10.3) 金额
+currency String 币种
+34/ 38
+},{ "currency": "USD", "feeName": "运费", "sum": 10.0
+}
+]
+}
+}
+失败响应示例
+{"code": 500, "msg": "订单暂无可对账费用", "data": null
+}
+2.11 打印凭证
+使用客户单号进行打印发货凭证、签收凭证。
+接口名称：getProofLabel
+请求类型：POST
+请求数据格式：
+字段 类型 描述 默认值 必填
+Body 请求体 Y
+customerOrderNo String(32) 客户单号 Y
+proofType Integer 凭证类型 10: 发运证明 / 20: 签收证明 Y
+返回数据格式：
+字段 类型 描述
+Body 响应体
+code Int 状态码。成功为 0，失败为对应的值。
+Msg String(512) 成功为 success，失败为错误原因。
+data Object
+customerOrderNo String(32) 客户单号
+label String 凭证单;返回为 Base64 格式的 PDF 文件
+请求 URL
+http://域名:端口/its-api/cs/api/getProofLabel
+请求示例
+{ "customerOrderNo":"UU903882345", "proofType": 10, }
+成功响应示例
+{ "code": 0, "msg": "success", "data": { "customerOrderNo":"UU903882345", "label": "JVBERi0xLjQKJeLjz9MKNSAwIG9iago8PC9GaWx0ZXIvRmxhdGVEZWNvZGUvTGVuZ3RoIDE1MDE+PnN0cmVhbQp
+4nOVXS2wbRRgeyWtb2kggQWkS2rRzCEpL2+m+7S2N1LQNbpImaRunbdwNrR+beBtn111vEwUJjggJDnDlgEQlJATk
+zhkhbvRQcUBcOHDjxJkLfDO7Tl2nrRf1goTG+5iZf77/+x/zz/qefL4sK7RoqKxYpOWGPF2Wr8r3ZIUpesGk27JGZzF/V1
+YVOi/fWlVoQ9YtWlRMLr8pm6bNtGK33+r2dYspBroQ7Xndk2rKN2Rf6OnFwruK94LKcQyLafq+fh+CSnkL118AZu1pN
+Lqc+6zpNzYm8YQ7+vD79fdyS+WQ/z0ThfKGECNPT7+tUk1jikrLa0jMcog0LUIeaRqLXSshJfgL5IwCU2xaMA1WgOim
+fCxbcvwfHP+z/IPj5btYgOUqViLhnw/dRVSL2CMG......"
+}
+}
+失败响应示例
+{ "code": 500, "msg": "订单不存在", "data": null
+}
+2.12 增加客户重量核对数据
+传入客户单号和客户实际重量。仓库入仓时将校验该重量并由仓库决定使用哪个重量作为结算的重量来源。
+接口名称：addCustomerRealWeight
+请求类型：POST
+请求数据格式：
+35/ 38
+36/ 38
+字段 类型 描述 默认值 必填
+Body 请求体 Y
+no String(32) 客户单号 Y
+customerRealWeight Double 客户测量重量 Y
+返回数据格式：
+字段 类型 描述
+Body 响应体
+code Int 状态码。成功为 0，失败为对应的值。
+Msg String(512) 成功为 success，失败为错误原因。
+data Object
+固定为 null
+请求 URL
+http://域名:端口/its-api/cs/api/addCustomerRealWeight
+请求示例
+{ "no":"UU903882345", "customerRealWeight": 1.0, }
+成功响应示例
+{ "code": 0, "msg": "success", "data": null
+}
+失败响应示例
+{ "code": 500, "msg": "订单不存在", "data": null
+37/ 38
+}
+2.13 增加预约提货单
+传递包裹信息和提货地址,创建预提货单
+接口名称：addPickupOrder
+请求类型：POST
+请求数据格式：
+字段 类型 描述 默认值 必填
+Body 请求体 Y
+companyOrderNo String(32) 业务单号 Y
+pickupDate String(32) 预约提货时间,格式如：yyyy-MM-dd HH:mm:ss Y
+packageQty Int 小包件数 Y
+containerQty Int 容器数量(大包数、箱数) Y
+weightD Double 毛重(KG) Y
+volumeD Double 体积(M³) Y
+customerAddress String(225) 提货地址 Y
+warehouseCode String(32) 交货仓库 Y
+customerMemo String(225) 客户备注 N
+返回数据格式：
+字段 类型 描述
+Body 响应体
+code Int 状态码。成功为 0，失败为对应的值。
+Msg String(512) 成功为 success，失败为错误原因。
+data Object
+固定为 null
+请求 URL
+http://域名:端口/its-api/cs/api/addPickupOrder
+请求示例
+{ "companyOrderNo": "PICKUP-00002", "pickupDate": "2025-04-07 12:00:04", "packageQty": 3200, "containerQty": 5,
+"customerAddress": "深圳市南山区南新路 128 号 12 楼 1218", "warehouseCode": "SHA1", "customerMemo": "测试备注", "volumeD": 11.11, "weightD": 131.21
+}
+成功响应示例
+{ "code": 0, "msg": "success", "data": null
+}
+失败响应示例
+{ "code": 500, "msg": "业务单号[PICKUP-00002]已经存在", "data": null
+}
+38/ 38
