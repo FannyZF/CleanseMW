@@ -98,13 +98,29 @@ def fetch_order_info(customer_order_no: str):
     base_url = _get_config()["its_base_url"]
 
     logger.info("Fetching order info for %s", customer_order_no)
-    resp = requests.post(
-        f"{base_url}/its-api/cs/api/getOrderInfo",
-        headers=headers,
-        data=body_str.encode("utf-8"),
-        timeout=30,
-    )
-    result = resp.json()
+    try:
+        resp = requests.post(
+            f"{base_url}/its-api/cs/api/getOrderInfo",
+            headers=headers,
+            data=body_str.encode("utf-8"),
+            timeout=30,
+        )
+    except requests.exceptions.ConnectionError:
+        return None, "ITS 服务连接失败，请检查 ITS_BASE_URL 地址和网络"
+    except requests.exceptions.Timeout:
+        return None, "ITS 服务请求超时"
+    except Exception as exc:
+        return None, f"ITS 接口请求异常: {exc}"
+
+    if resp.status_code != 200:
+        snippet = resp.text[:200] if resp.text else ""
+        return None, f"ITS 返回 HTTP {resp.status_code}: {snippet}"
+
+    try:
+        result = resp.json()
+    except Exception:
+        snippet = resp.text[:200] if resp.text else ""
+        return None, f"ITS 返回非 JSON 格式: {snippet}"
 
     if result.get("code") != 0:
         return None, result.get("msg", "Unknown error")
