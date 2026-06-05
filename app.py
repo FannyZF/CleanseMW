@@ -289,6 +289,14 @@ def _detect_name_lang(name: str) -> str:
     return "other"
 
 
+def _is_romaji_valid(romaji: str) -> bool:
+    if not romaji:
+        return False
+    has_cjk = any("\u4e00" <= c <= "\u9fff" for c in romaji)
+    has_latin = any(c.isalpha() and ord(c) < 128 for c in romaji)
+    return has_latin and not has_cjk
+
+
 def _chinese_to_romaji(name: str) -> str:
     if not name:
         return ""
@@ -643,12 +651,14 @@ def step3_update():
         if lang == "english":
             consignee_name = katakana
             consignee_company = raw_name
-        elif lang == "chinese":
-            consignee_name = katakana
-            consignee_company = _chinese_to_romaji(raw_name)
-        else:
+        elif _is_romaji_valid(romaji):
+            # API returned valid Latin romaji → Japanese name (kanji or kana)
             consignee_name = raw_name
             consignee_company = romaji
+        else:
+            # Truly Chinese or API couldn't produce romaji
+            consignee_name = katakana
+            consignee_company = _chinese_to_romaji(raw_name)
         try:
             update_resp = update_order_its(order_no, cleansed_address, cleansed_zip, consignee_name, consignee_company)
             if update_resp.get("code") == 0:
