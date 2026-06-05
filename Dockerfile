@@ -11,4 +11,4 @@ ENV PORT=19933
 
 EXPOSE 19933
 
-CMD ["gunicorn", "wsgi:app", "--bind", "0.0.0.0:19933", "--workers", "2", "--timeout", "300"]
+CMD ["gunicorn", "wsgi:app", "--bind", "0.0.0.0:19933", "--workers", "1", "--timeout", "300", "--preload"]
