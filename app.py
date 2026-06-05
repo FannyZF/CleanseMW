@@ -241,6 +241,7 @@ def extract_name_result(name_response: dict) -> dict:
             name_data = data.get("name", {})
             results_map[ref_id] = {
                 "original_name": name_data.get("original", ""),
+                "japanese_katakana": name_data.get("japanese_katakana", ""),
                 "english_romaji": name_data.get("english_romaji", ""),
             }
         return results_map
@@ -251,9 +252,24 @@ def extract_name_result(name_response: dict) -> dict:
     name_data = data.get("name", {})
     results_map[ref_id] = {
         "original_name": name_data.get("original", ""),
+        "japanese_katakana": name_data.get("japanese_katakana", ""),
         "english_romaji": name_data.get("english_romaji", ""),
     }
     return results_map
+
+
+def _detect_name_lang(name: str) -> str:
+    if not name:
+        return "other"
+    has_kana = any("\u3040" <= c <= "\u30ff" for c in name)
+    if has_kana:
+        return "japanese"
+    has_cjk = any("\u4e00" <= c <= "\u9fff" for c in name)
+    if has_cjk:
+        return "chinese"
+    if any(c.isalpha() and ord(c) < 128 for c in name):
+        return "english"
+    return "other"
 def lookup_zipcloud(zipcode: str) -> str:
     if not zipcode:
         return ""
@@ -476,6 +492,7 @@ def step2_cleanse():
                 order_no = r["customerOrderNo"]
                 if order_no in all_names:
                     r["original_name"] = all_names[order_no]["original_name"]
+                    r["japanese_katakana"] = all_names[order_no]["japanese_katakana"]
                     r["english_romaji"] = all_names[order_no]["english_romaji"]
                     r["consigneeName"] = all_names[order_no]["original_name"]
         else:
@@ -585,6 +602,7 @@ def step3_update():
                 "cleansed_address": cdata["cleansed_address"],
                 "cleansed_zipcode": cdata["cleansed_zip"],
                 "original_name": ndata.get("original_name", ""),
+                "english_romaji": ndata.get("english_romaji", ""),
                 "status": "skip",
                 "message": "地址未通过验证，跳过更新",
             })
@@ -592,8 +610,21 @@ def step3_update():
 
         cleansed_address = cdata["cleansed_address"]
         cleansed_zip = cdata["cleansed_zip"]
-        consignee_name = ndata.get("original_name", "")
-        consignee_company = ndata.get("english_romaji", "")
+
+        raw_name = item.get("consigneeName", "")
+        lang = _detect_name_lang(raw_name)
+        katakana = ndata.get("japanese_katakana", "")
+        romaji = ndata.get("english_romaji", "")
+
+        if lang == "english":
+            consignee_name = katakana
+            consignee_company = raw_name
+        elif lang == "chinese":
+            consignee_name = katakana
+            consignee_company = romaji
+        else:
+            consignee_name = raw_name
+            consignee_company = romaji
         try:
             update_resp = update_order_its(order_no, cleansed_address, cleansed_zip, consignee_name, consignee_company)
             if update_resp.get("code") == 0:
