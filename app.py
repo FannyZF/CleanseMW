@@ -8,6 +8,7 @@ import threading
 
 import requests
 from flask import Flask, render_template, request, jsonify
+from pypinyin import lazy_pinyin, Style
 
 app = Flask(__name__)
 
@@ -286,6 +287,13 @@ def _detect_name_lang(name: str) -> str:
     if any(c.isalpha() and ord(c) < 128 for c in name):
         return "english"
     return "other"
+
+
+def _chinese_to_romaji(name: str) -> str:
+    if not name:
+        return ""
+    parts = lazy_pinyin(name, style=Style.NORMAL, errors="ignore")
+    return " ".join(parts).title()
 def lookup_zipcloud(zipcode: str) -> str:
     if not zipcode:
         return ""
@@ -637,7 +645,7 @@ def step3_update():
             consignee_company = raw_name
         elif lang == "chinese":
             consignee_name = katakana
-            consignee_company = romaji
+            consignee_company = _chinese_to_romaji(raw_name)
         else:
             consignee_name = raw_name
             consignee_company = romaji
