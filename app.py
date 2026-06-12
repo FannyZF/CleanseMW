@@ -259,6 +259,7 @@ def extract_name_result(name_response: dict) -> dict:
             results_map[ref_id] = {
                 "original_name": name_data.get("original", ""),
                 "japanese_katakana": name_data.get("japanese_katakana", ""),
+                "japanese_kanji": name_data.get("japanese_kanji", ""),
                 "english_romaji": name_data.get("english_romaji", ""),
             }
         return results_map
@@ -270,6 +271,7 @@ def extract_name_result(name_response: dict) -> dict:
     results_map[ref_id] = {
         "original_name": name_data.get("original", ""),
         "japanese_katakana": name_data.get("japanese_katakana", ""),
+        "japanese_kanji": name_data.get("japanese_kanji", ""),
         "english_romaji": name_data.get("english_romaji", ""),
     }
     return results_map
@@ -525,6 +527,7 @@ def step2_cleanse():
                 if order_no in all_names:
                     r["original_name"] = all_names[order_no]["original_name"]
                     r["japanese_katakana"] = all_names[order_no]["japanese_katakana"]
+                    r["japanese_kanji"] = all_names[order_no]["japanese_kanji"]
                     r["english_romaji"] = all_names[order_no]["english_romaji"]
                     r["consigneeName"] = all_names[order_no]["original_name"]
         else:
@@ -646,10 +649,11 @@ def step3_update():
         raw_name = item.get("consigneeName", "")
         lang = _detect_name_lang(raw_name)
         katakana = ndata.get("japanese_katakana", "")
+        kanji = ndata.get("japanese_kanji", "")
         romaji = ndata.get("english_romaji", "")
 
         if lang == "english":
-            consignee_name = katakana
+            consignee_name = kanji or katakana
             consignee_company = raw_name
         elif _is_romaji_valid(romaji):
             # API returned valid Latin romaji → Japanese name (kanji or kana)
