@@ -334,7 +334,7 @@ async function runStep2() {
       ? data.results.map(r => '<tr id="row-'+escAttr(r.customerOrderNo)+'">'+
           '<td>'+esc(r.customerOrderNo)+'</td>'+
           '<td>'+esc(r.consigneeName||'')+'</td>'+
-          '<td>'+esc(r.english_romaji||'')+'</td>'+
+          '<td>'+esc(r.consigneeCompany||'')+'</td>'+
           '<td title="'+escAttr(r.raw_address||'')+'" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;">'+esc(r.raw_address||'')+'</td>'+
           '<td>'+esc(r.provided_zipcode||'')+'</td>'+
           '<td title="'+escAttr(r.cleansed_address||'')+'" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;">'+esc(r.cleansed_address||'')+'</td>'+

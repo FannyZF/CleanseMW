@@ -299,7 +299,19 @@ def _is_romaji_valid(romaji: str) -> bool:
     return has_latin and not has_cjk
 
 
-def _chinese_to_romaji(name: str) -> str:
+def _resolve_consignee_name(raw_name: str, ndata: dict) -> tuple:
+    """Return (consigneeName, consigneeCompany) based on language detection."""
+    lang = _detect_name_lang(raw_name)
+    katakana = ndata.get("japanese_katakana", "")
+    kanji = ndata.get("japanese_kanji", "")
+    romaji = ndata.get("english_romaji", "")
+
+    if lang == "english":
+        return (kanji or katakana, raw_name)
+    elif _is_romaji_valid(romaji):
+        return (raw_name, romaji)
+    else:
+        return (katakana, _chinese_to_romaji(raw_name))
     if not name:
         return ""
     parts = lazy_pinyin(name, style=Style.NORMAL, errors="ignore")
@@ -525,11 +537,21 @@ def step2_cleanse():
             for r in results:
                 order_no = r["customerOrderNo"]
                 if order_no in all_names:
-                    r["original_name"] = all_names[order_no]["original_name"]
-                    r["japanese_katakana"] = all_names[order_no]["japanese_katakana"]
-                    r["japanese_kanji"] = all_names[order_no]["japanese_kanji"]
-                    r["english_romaji"] = all_names[order_no]["english_romaji"]
-                    r["consigneeName"] = all_names[order_no]["original_name"]
+                    ndata = all_names[order_no]
+                    # Find the matching success_item to get raw_name
+                    raw_name = ""
+                    for item in success_items:
+                        if item["customerOrderNo"] == order_no:
+                            raw_name = item.get("consigneeName", "")
+                            break
+                    resolved_name, resolved_company = _resolve_consignee_name(raw_name, ndata)
+                    r["original_name"] = ndata["original_name"]
+                    r["japanese_katakana"] = ndata.get("japanese_katakana", "")
+                    r["english_romaji"] = ndata.get("english_romaji", "")
+                    r["consigneeName"] = resolved_name
+                    r["consigneeCompany"] = resolved_company
+                    all_names[order_no]["resolved_name"] = resolved_name
+                    all_names[order_no]["resolved_company"] = resolved_company
         else:
             logger.warning("[Step 2] Name cleansing failed: %s", name_resp.get("message", ""))
     except Exception as exc:
@@ -636,8 +658,8 @@ def step3_update():
                 "customerOrderNo": order_no,
                 "cleansed_address": cdata["cleansed_address"],
                 "cleansed_zipcode": cdata["cleansed_zip"],
-                "original_name": ndata.get("original_name", ""),
-                "english_romaji": ndata.get("english_romaji", ""),
+                "original_name": ndata.get("resolved_name", ""),
+                "english_romaji": ndata.get("resolved_company", ""),
                 "status": "skip",
                 "message": "地址未通过验证，跳过更新",
             })
@@ -646,23 +668,8 @@ def step3_update():
         cleansed_address = cdata["cleansed_address"]
         cleansed_zip = cdata["cleansed_zip"]
 
-        raw_name = item.get("consigneeName", "")
-        lang = _detect_name_lang(raw_name)
-        katakana = ndata.get("japanese_katakana", "")
-        kanji = ndata.get("japanese_kanji", "")
-        romaji = ndata.get("english_romaji", "")
-
-        if lang == "english":
-            consignee_name = kanji or katakana
-            consignee_company = raw_name
-        elif _is_romaji_valid(romaji):
-            # API returned valid Latin romaji → Japanese name (kanji or kana)
-            consignee_name = raw_name
-            consignee_company = romaji
-        else:
-            # Truly Chinese or API couldn't produce romaji
-            consignee_name = katakana
-            consignee_company = _chinese_to_romaji(raw_name)
+        consignee_name = ndata.get("resolved_name", ndata.get("original_name", ""))
+        consignee_company = ndata.get("resolved_company", ndata.get("english_romaji", ""))
         try:
             update_resp = update_order_its(order_no, cleansed_address, cleansed_zip, consignee_name, consignee_company)
             if update_resp.get("code") == 0:
