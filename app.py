@@ -312,10 +312,52 @@ def _resolve_consignee_name(raw_name: str, ndata: dict) -> tuple:
         return (raw_name, romaji)
     else:
         return (katakana, _chinese_to_romaji(raw_name))
+
+
+def _chinese_to_romaji(name: str) -> str:
     if not name:
         return ""
     parts = lazy_pinyin(name, style=Style.NORMAL, errors="ignore")
     return " ".join(parts).title()
+
+
+def _parse_japanese_address(full_addr: str) -> tuple:
+    """Split Japanese address into (province, city, district, address)."""
+    province = city = district = address = ""
+    if not full_addr:
+        return province, city, district, address
+    remaining = full_addr
+
+    for suffix in ["都", "道", "府", "県"]:
+        idx = remaining.find(suffix)
+        if idx >= 0:
+            province = remaining[:idx + 1]
+            remaining = remaining[idx + 1:]
+            break
+
+    idx_shi = remaining.find("市")
+    idx_ku = remaining.find("区")
+    if idx_shi >= 0 and (idx_ku < 0 or idx_shi < idx_ku):
+        city = remaining[:idx_shi + 1]
+        remaining = remaining[idx_shi + 1:]
+    elif idx_ku >= 0:
+        city = remaining[:idx_ku + 1]
+        remaining = remaining[idx_ku + 1:]
+
+    idx_machi = remaining.find("町")
+    if idx_machi >= 0:
+        district = remaining[:idx_machi + 1]
+        address = remaining[idx_machi + 1:]
+    else:
+        digit_match = re.search(r"\d", remaining)
+        if digit_match:
+            idx = digit_match.start()
+            district = remaining[:idx]
+            address = remaining[idx:]
+        else:
+            address = remaining
+
+    return province, city, district, address
 def lookup_zipcloud(zipcode: str) -> str:
     if not zipcode:
         return ""
@@ -339,12 +381,14 @@ def extract_digit_candidates(raw_address: str) -> list:
     candidates = re.findall(r"\d+", raw_address)
     # filter out likely zipcodes (exactly 7 digits) and very long numbers
     return [c for c in candidates if len(c) != 7 and len(c) <= 5]
-def update_order_its(customer_order_no: str, cleansed_address: str, cleansed_postcode: str, consignee_name: str = "", consignee_company: str = ""):
+def update_order_its(customer_order_no: str, cleansed_address: str, cleansed_postcode: str,
+                     consignee_name: str = "", consignee_company: str = "",
+                     province: str = "", city: str = "", district: str = ""):
     consignee = {
         "consigneeCountry": "JP",
-        "consigneeProvince": " ",
-        "consigneeCity": " ",
-        "consigneeDistrict": " ",
+        "consigneeProvince": province or " ",
+        "consigneeCity": city or " ",
+        "consigneeDistrict": district or " ",
         "consigneeAddress": cleansed_address,
         "consigneePostcode": cleansed_postcode,
     }
@@ -668,10 +712,17 @@ def step3_update():
         cleansed_address = cdata["cleansed_address"]
         cleansed_zip = cdata["cleansed_zip"]
 
+        province, city, district, street = _parse_japanese_address(cleansed_address)
+
         consignee_name = ndata.get("resolved_name", ndata.get("original_name", ""))
         consignee_company = ndata.get("resolved_company", ndata.get("english_romaji", ""))
+
         try:
-            update_resp = update_order_its(order_no, cleansed_address, cleansed_zip, consignee_name, consignee_company)
+            update_resp = update_order_its(
+                order_no, street or cleansed_address, cleansed_zip,
+                consignee_name, consignee_company,
+                province, city, district,
+            )
             if update_resp.get("code") == 0:
                 results.append({
                     "customerOrderNo": order_no,
