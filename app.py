@@ -5,7 +5,6 @@ import hashlib
 import time
 import logging
 import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
 from flask import Flask, render_template, request, jsonify
@@ -517,35 +516,26 @@ def step1_fetch_orders():
 
     results = []
     success_items = []
-
-    with ThreadPoolExecutor(max_workers=5) as executor:
-        futures = {executor.submit(fetch_order_info, no): no for no in order_numbers}
-        for future in as_completed(futures):
-            order_no = futures[future]
-            item, error = future.result()
-            if error:
-                results.append({
-                    "customerOrderNo": order_no,
-                    "status": "error",
-                    "message": error,
-                })
-            else:
-                results.append({
-                    "customerOrderNo": item["customerOrderNo"],
-                    "province": item["province"],
-                    "city": item["city"],
-                    "district": item["district"],
-                    "address": item["address"],
-                    "postcode": item["postcode"],
-                    "consigneeName": item["consigneeName"],
-                    "status": "success",
-                })
-                success_items.append(item)
-
-    # Sort results to match original order
-    order_index = {no: i for i, no in enumerate(order_numbers)}
-    results.sort(key=lambda r: order_index.get(r["customerOrderNo"], 999))
-    success_items.sort(key=lambda s: order_index.get(s["customerOrderNo"], 999))
+    for order_no in order_numbers:
+        item, error = fetch_order_info(order_no)
+        if error:
+            results.append({
+                "customerOrderNo": order_no,
+                "status": "error",
+                "message": error,
+            })
+        else:
+            results.append({
+                "customerOrderNo": item["customerOrderNo"],
+                "province": item["province"],
+                "city": item["city"],
+                "district": item["district"],
+                "address": item["address"],
+                "postcode": item["postcode"],
+                "consigneeName": item["consigneeName"],
+                "status": "success",
+            })
+            success_items.append(item)
 
     # Store intermediate data keyed by a task_id
     import uuid
