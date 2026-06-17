@@ -599,7 +599,12 @@ function renderAddressSummary(s) {
 }
 
 function hideStep(n) {
-  document.getElementById('step'+n+'-result').style.display = 'none';
+  if (n === 2) {
+    var el = document.getElementById('step2a-result'); if (el) el.style.display = 'none';
+    el = document.getElementById('step2b-result'); if (el) el.style.display = 'none';
+  } else {
+    var el = document.getElementById('step'+n+'-result'); if (el) el.style.display = 'none';
+  }
 }
 function resetDownstream() {
   hideStep(2); hideStep(3);
