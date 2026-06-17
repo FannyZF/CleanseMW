@@ -518,8 +518,12 @@ def step2_cleanse():
     unverified = []
     all_names = {}
 
+    # ── Address cleansing ──
+    logger.info("[Step 2] Starting address cleansing...")
     for i in range(0, len(success_items), BATCH_SIZE):
         sub_batch = success_items[i : i + BATCH_SIZE]
+        logger.info("[Step 2] Address batch %d/%d (%d items)", i // BATCH_SIZE + 1,
+                    (len(success_items) + BATCH_SIZE - 1) // BATCH_SIZE, len(sub_batch))
         try:
             cleanse_resp = cleanse_addresses_batch(sub_batch)
             if cleanse_resp.get("status") == "success":
@@ -574,6 +578,7 @@ def step2_cleanse():
                 })
 
     # Name cleansing
+    logger.info("[Step 2] Address cleansing done, starting name cleansing...")
     try:
         name_resp = cleanse_names_batch(success_items)
         if name_resp.get("status") == "success":
@@ -608,12 +613,14 @@ def step2_cleanse():
         _task_store[task_id]["success_items"] = success_items
 
     # Enrich unverified orders with ZipCloud data and digit candidates
+    logger.info("[Step 2] Name cleansing done, enriching %d unverified orders...", len(unverified))
     unverified_details = []
     for item in success_items:
         order_no = item["customerOrderNo"]
         cdata = all_cleansed.get(order_no, {})
         if cdata.get("cleansed_address") and not cdata.get("is_valid", False):
             zipcode = cdata.get("cleansed_zip", "") or item.get("provided_zipcode", "")
+            logger.debug("[Step 2] ZipCloud lookup for %s: %s", order_no, zipcode)
             town = lookup_zipcloud(zipcode)
             digits = extract_digit_candidates(item.get("raw_address", ""))
             unverified_details.append({
