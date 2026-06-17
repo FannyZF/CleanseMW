@@ -506,9 +506,9 @@ def step1_fetch_orders():
     })
 
 
-# ── STEP 2: 调用地址清洗 API ───────────────────────────────────────────
-@app.route("/api/step2", methods=["POST"])
-def step2_cleanse():
+# ── STEP 2a: 地址清洗 ──────────────────────────────────────────────────
+@app.route("/api/step2a", methods=["POST"])
+def step2a_address():
     data = request.get_json(silent=True) or {}
     task_id = data.get("task_id", "")
 
@@ -519,13 +519,12 @@ def step2_cleanse():
         return jsonify({"error": "任务已过期，请从第一步重新开始"}), 400
 
     success_items = task["success_items"]
-    logger.info("[Step 2] Cleansing %d item(s)", len(success_items))
+    logger.info("[Step 2a] Cleansing %d address(es)", len(success_items))
 
     BATCH_SIZE = 100
     results = []
     all_cleansed = {}
     unverified = []
-    all_names = {}
 
     # ── Address cleansing ──
     logger.info("[Step 2] Starting address cleansing...")
@@ -586,50 +585,19 @@ def step2_cleanse():
                     "message": str(exc),
                 })
 
-    # Name cleansing
-    logger.info("[Step 2] Address cleansing done, starting name cleansing...")
-    try:
-        name_resp = cleanse_names_batch(success_items)
-        if name_resp.get("status") == "success":
-            all_names = extract_name_result(name_resp)
-            for r in results:
-                order_no = r["customerOrderNo"]
-                if order_no in all_names:
-                    ndata = all_names[order_no]
-                    # Find the matching success_item to get raw_name
-                    raw_name = ""
-                    for item in success_items:
-                        if item["customerOrderNo"] == order_no:
-                            raw_name = item.get("consigneeName", "")
-                            break
-                    resolved_name, resolved_company = _resolve_consignee_name(raw_name, ndata)
-                    r["original_name"] = ndata["original_name"]
-                    r["japanese_katakana"] = ndata.get("japanese_katakana", "")
-                    r["english_romaji"] = ndata.get("english_romaji", "")
-                    r["consigneeName"] = resolved_name
-                    r["consigneeCompany"] = resolved_company
-                    all_names[order_no]["resolved_name"] = resolved_name
-                    all_names[order_no]["resolved_company"] = resolved_company
-        else:
-            logger.warning("[Step 2] Name cleansing failed: %s", name_resp.get("message", ""))
-    except Exception as exc:
-        logger.exception("[Step 2] Name batch failed")
-
     # Store cleanse results
     with _task_lock:
         _task_store[task_id]["all_cleansed"] = all_cleansed
-        _task_store[task_id]["all_names"] = all_names
         _task_store[task_id]["success_items"] = success_items
 
     # Enrich unverified orders with ZipCloud data and digit candidates
-    logger.info("[Step 2] Name cleansing done, enriching %d unverified orders...", len(unverified))
+    logger.info("[Step 2a] Enriching %d unverified orders...", len(unverified))
     unverified_details = []
     for item in success_items:
         order_no = item["customerOrderNo"]
         cdata = all_cleansed.get(order_no, {})
         if cdata.get("cleansed_address") and not cdata.get("is_valid", False):
             zipcode = cdata.get("cleansed_zip", "") or item.get("provided_zipcode", "")
-            logger.debug("[Step 2] ZipCloud lookup for %s: %s", order_no, zipcode)
             town = lookup_zipcloud(zipcode)
             digits = extract_digit_candidates(item.get("raw_address", ""))
             unverified_details.append({
@@ -654,6 +622,60 @@ def step2_cleanse():
             "unverified": len(unverified_details),
             "error": error_count,
         },
+    })
+
+
+# ── STEP 2b: 姓名清洗 ──────────────────────────────────────────────────
+@app.route("/api/step2b", methods=["POST"])
+def step2b_name():
+    data = request.get_json(silent=True) or {}
+    task_id = data.get("task_id", "")
+
+    with _task_lock:
+        task = _task_store.get(task_id)
+
+    if not task:
+        return jsonify({"error": "任务已过期，请从第一步重新开始"}), 400
+
+    success_items = task["success_items"]
+    logger.info("[Step 2b] Cleansing %d name(s)", len(success_items))
+
+    all_names = {}
+    results = []
+
+    try:
+        name_resp = cleanse_names_batch(success_items)
+        if name_resp.get("status") == "success":
+            all_names = extract_name_result(name_resp)
+            for item in success_items:
+                order_no = item["customerOrderNo"]
+                ndata = all_names.get(order_no, {})
+                raw_name = item.get("consigneeName", "")
+                res_name, res_company = _resolve_consignee_name(raw_name, ndata) if ndata else ("", "")
+                all_names[order_no] = ndata
+                all_names[order_no]["resolved_name"] = res_name
+                all_names[order_no]["resolved_company"] = res_company
+                results.append({
+                    "customerOrderNo": order_no,
+                    "original_name": ndata.get("original_name", raw_name),
+                    "english_romaji": res_company,
+                    "consigneeName": res_name,
+                    "consigneeCompany": res_company,
+                    "status": "success" if ndata else "error",
+                    "message": "" if ndata else "姓名清洗无结果",
+                })
+    except Exception as exc:
+        logger.exception("[Step 2b] Name cleansing failed")
+
+    with _task_lock:
+        _task_store[task_id]["all_names"] = all_names
+
+    total = len(success_items)
+    success = sum(1 for r in results if r["status"] == "success")
+    return jsonify({
+        "task_id": task_id,
+        "results": results,
+        "summary": {"total": total, "success": success, "error": total - success},
     })
 
 
@@ -705,33 +727,26 @@ def step3_update():
         cdata = all_cleansed.get(order_no, {})
         ndata = all_names.get(order_no, {})
 
-        if not cdata.get("cleansed_address"):
+        has_address = bool(cdata.get("cleansed_address") and cdata.get("is_valid", False))
+        has_name = bool(ndata.get("resolved_name"))
+
+        if not has_address and not has_name:
             results.append({
                 "customerOrderNo": order_no,
                 "status": "skip",
-                "message": "无清洗结果，跳过更新",
+                "message": "无地址和姓名清洗数据，跳过更新",
             })
             continue
 
-        if not cdata.get("is_valid", False):
-            results.append({
-                "customerOrderNo": order_no,
-                "cleansed_address": cdata["cleansed_address"],
-                "cleansed_zipcode": cdata["cleansed_zip"],
-                "original_name": ndata.get("resolved_name", ""),
-                "english_romaji": ndata.get("resolved_company", ""),
-                "status": "skip",
-                "message": "地址未通过验证，跳过更新",
-            })
-            continue
+        cleansed_address = cdata.get("cleansed_address", "")
+        cleansed_zip = cdata.get("cleansed_zip", item.get("provided_zipcode", ""))
+        province, city, district, street = "", "", "", ""
 
-        cleansed_address = cdata["cleansed_address"]
-        cleansed_zip = cdata["cleansed_zip"]
+        if cleansed_address:
+            province, city, district, street = _parse_japanese_address(cleansed_address)
 
-        province, city, district, street = _parse_japanese_address(cleansed_address)
-
-        consignee_name = ndata.get("resolved_name", ndata.get("original_name", ""))
-        consignee_company = ndata.get("resolved_company", ndata.get("english_romaji", ""))
+        consignee_name = ndata.get("resolved_name", item.get("consigneeName", ""))
+        consignee_company = ndata.get("resolved_company", "")
 
         try:
             update_resp = update_order_its(

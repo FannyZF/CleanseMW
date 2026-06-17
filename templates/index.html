@@ -131,30 +131,47 @@
     </div>
   </div>
 
-  <!-- ── Step 2: 地址清洗 ── -->
-  <div class="step-card" id="step2-card">
-    <div class="step-title"><span class="step-num">2</span> 地址清洗</div>
+  <!-- ── Step 2a: 地址清洗 ── -->
+  <div class="step-card" id="step2a-card">
+    <div class="step-title"><span class="step-num">2a</span> 地址清洗</div>
     <div class="step-actions">
-      <button id="step2-btn" onclick="runStep2()" disabled>地址清洗</button>
-      <span class="status-bar" id="step2-status"></span>
+      <button id="step2a-btn" onclick="runStep2a()" disabled>地址清洗</button>
+      <span class="status-bar" id="step2a-status"></span>
     </div>
-    <div class="step-result" id="step2-result" style="display:none;">
-      <div class="summary" id="step2-summary"></div>
+    <div class="step-result" id="step2a-result" style="display:none;">
+      <div class="summary" id="step2a-summary"></div>
       <div class="table-wrap">
         <table><thead><tr>
-          <th>订单号</th><th>收件人</th><th>英文名</th><th>原始地址</th><th>原始邮编</th><th>清洗后地址</th><th>清洗后邮编</th><th>状态</th><th>说明</th>
-        </tr></thead><tbody id="step2-tbody"></tbody></table>
+          <th>订单号</th><th>原始地址</th><th>原始邮编</th><th>清洗后地址</th><th>清洗后邮编</th><th>状态</th><th>说明</th>
+        </tr></thead><tbody id="step2a-tbody"></tbody></table>
       </div>
-      <div id="step2-unverified-box" style="display:none; margin-top:14px;">
+      <div id="step2a-unverified-box" style="display:none; margin-top:14px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
           <label style="margin:0;">以下订单地址未通过验证，请逐一手工修正：</label>
           <span style="font-size:13px;color:#795548;" id="unverified-progress"></span>
         </div>
-        <div id="step2-unverified-list"></div>
+        <div id="step2a-unverified-list"></div>
         <div style="margin-top:10px;display:flex;align-items:center;gap:10px;">
           <button class="btn-sm btn-green" id="correct-save-btn" style="display:none;" onclick="saveOneCorrection()">保存并继续</button>
-          <span id="step2-correct-saved" style="font-size:13px;"></span>
+          <span id="step2a-correct-saved" style="font-size:13px;"></span>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Step 2b: 姓名清洗 ── -->
+  <div class="step-card" id="step2b-card">
+    <div class="step-title"><span class="step-num">2b</span> 姓名清洗</div>
+    <div class="step-actions">
+      <button id="step2b-btn" onclick="runStep2b()" disabled>姓名清洗</button>
+      <span class="status-bar" id="step2b-status"></span>
+    </div>
+    <div class="step-result" id="step2b-result" style="display:none;">
+      <div class="summary" id="step2b-summary"></div>
+      <div class="table-wrap">
+        <table><thead><tr>
+          <th>订单号</th><th>原始姓名</th><th>清洗后姓名</th><th>英文名</th><th>状态</th><th>说明</th>
+        </tr></thead><tbody id="step2b-tbody"></tbody></table>
       </div>
     </div>
   </div>
@@ -295,8 +312,10 @@ async function runStep1() {
     markCard('step1-card', 'done');
 
     if ((data.summary||{}).success > 0) {
-      document.getElementById('step2-btn').disabled = false;
-      markCard('step2-card', 'active');
+      document.getElementById('step2a-btn').disabled = false;
+      document.getElementById('step2b-btn').disabled = false;
+      markCard('step2a-card', 'active');
+      markCard('step2b-card', 'active');
     }
   } catch(e) {
     status.innerHTML = '<span style="color:#c62828;">请求失败：'+esc(String(e))+'</span>';
@@ -305,19 +324,19 @@ async function runStep1() {
   }
 }
 
-// ── Step 2 ────────────────────────────────────────────────────────────
-async function runStep2() {
+// ── Step 2a: Address ──────────────────────────────────────────────────
+async function runStep2a() {
   if (!taskId) return;
-  const btn = document.getElementById('step2-btn');
-  const status = document.getElementById('step2-status');
+  const btn = document.getElementById('step2a-btn');
+  const status = document.getElementById('step2a-status');
   btn.disabled = true; btn.textContent = '清洗中...';
   status.innerHTML = '<span class="loader"></span>正在地址清洗...';
-  markCard('step2-card', 'active');
+  markCard('step2a-card', 'active');
   hideStep(3);
   resetStep3();
 
   try {
-    const resp = await fetch('/api/step2', {
+    const resp = await fetch('/api/step2a', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({task_id: taskId})
@@ -325,45 +344,40 @@ async function runStep2() {
     const data = await resp.json();
     if (data.error) { status.innerHTML = '<span style="color:#c62828;">'+esc(data.error)+'</span>'; btn.disabled = false; btn.textContent = '地址清洗'; return; }
 
-    step2Data = data;
-    renderSummary2(data.summary || {});
+    step2aData = data;
+    renderAddressSummary(data.summary || {});
 
-    // Render step 2 results table (no verdict column)
-    const tbody = document.getElementById('step2-tbody');
+    const tbody = document.getElementById('step2a-tbody');
     tbody.innerHTML = (data.results||[]).length
       ? data.results.map(r => '<tr id="row-'+escAttr(r.customerOrderNo)+'">'+
           '<td>'+esc(r.customerOrderNo)+'</td>'+
-          '<td>'+esc(r.consigneeName||'')+'</td>'+
-          '<td>'+esc(r.consigneeCompany||'')+'</td>'+
-          '<td title="'+escAttr(r.raw_address||'')+'" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;">'+esc(r.raw_address||'')+'</td>'+
+          '<td title="'+escAttr(r.raw_address||'')+'" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;">'+esc(r.raw_address||'')+'</td>'+
           '<td>'+esc(r.provided_zipcode||'')+'</td>'+
-          '<td title="'+escAttr(r.cleansed_address||'')+'" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;">'+esc(r.cleansed_address||'')+'</td>'+
+          '<td title="'+escAttr(r.cleansed_address||'')+'" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;">'+esc(r.cleansed_address||'')+'</td>'+
           '<td>'+esc(r.cleansed_zipcode||'')+'</td>'+
           '<td id="badge-'+escAttr(r.customerOrderNo)+'">'+badge(r.status)+'</td>'+
           '<td>'+esc(r.message||'')+'</td>'+
           '</tr>').join('')
-      : '<tr><td colspan="9" class="empty">无结果</td></tr>';
+      : '<tr><td colspan="7" class="empty">无结果</td></tr>';
 
-    // Render correction UI for unverified orders - show one at a time
     selectedDigits = {};
     unverifiedIndex = 0;
-    const unverifiedBox = document.getElementById('step2-unverified-box');
-    const unverifiedList = document.getElementById('step2-unverified-list');
+    const unverifiedBox = document.getElementById('step2a-unverified-box');
+    const unverifiedList = document.getElementById('step2a-unverified-list');
     const unverified = data.unverified || [];
     if (unverified.length > 0) {
       unverifiedAll = unverified;
       unverifiedBox.style.display = 'block';
-      document.getElementById('step2-correct-saved').textContent = '';
+      document.getElementById('step2a-correct-saved').textContent = '';
       renderUnverifiedCard(unverifiedIndex);
     } else {
       unverifiedBox.style.display = 'none';
     }
 
-    document.getElementById('step2-result').style.display = 'block';
+    document.getElementById('step2a-result').style.display = 'block';
     status.innerHTML = '完成';
-    markCard('step2-card', 'done');
+    markCard('step2a-card', 'done');
 
-    // Enable step 3 if there are verified orders
     if ((data.summary||{}).verified > 0) {
       document.getElementById('step3-btn').disabled = false;
       markCard('step3-card', 'active');
@@ -372,6 +386,50 @@ async function runStep2() {
     status.innerHTML = '<span style="color:#c62828;">请求失败：'+esc(String(e))+'</span>';
   } finally {
     btn.disabled = false; btn.textContent = '地址清洗';
+  }
+}
+
+// ── Step 2b: Name ─────────────────────────────────────────────────────
+async function runStep2b() {
+  if (!taskId) return;
+  const btn = document.getElementById('step2b-btn');
+  const status = document.getElementById('step2b-status');
+  btn.disabled = true; btn.textContent = '清洗中...';
+  status.innerHTML = '<span class="loader"></span>正在姓名清洗...';
+  markCard('step2b-card', 'active');
+
+  try {
+    const resp = await fetch('/api/step2b', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({task_id: taskId})
+    });
+    const data = await resp.json();
+    if (data.error) { status.innerHTML = '<span style="color:#c62828;">'+esc(data.error)+'</span>'; btn.disabled = false; btn.textContent = '姓名清洗'; return; }
+
+    renderSummary('step2b-summary', data.summary || {});
+
+    const tbody = document.getElementById('step2b-tbody');
+    tbody.innerHTML = (data.results||[]).length
+      ? data.results.map(r => '<tr>'+
+          '<td>'+esc(r.customerOrderNo)+'</td>'+
+          '<td>'+esc(r.original_name||'')+'</td>'+
+          '<td>'+esc(r.consigneeName||'')+'</td>'+
+          '<td>'+esc(r.english_romaji||'')+'</td>'+
+          '<td>'+badge(r.status)+'</td>'+
+          '<td>'+esc(r.message||'')+'</td>'+
+          '</tr>').join('')
+      : '<tr><td colspan="6" class="empty">无结果</td></tr>';
+
+    document.getElementById('step2b-result').style.display = 'block';
+    status.innerHTML = '完成';
+    markCard('step2b-card', 'done');
+    document.getElementById('step3-btn').disabled = false;
+    markCard('step3-card', 'active');
+  } catch(e) {
+    status.innerHTML = '<span style="color:#c62828;">请求失败：'+esc(String(e))+'</span>';
+  } finally {
+    btn.disabled = false; btn.textContent = '姓名清洗';
   }
 }
 
@@ -424,7 +482,7 @@ let unverifiedAll = [];
 let unverifiedIndex = 0;
 
 function renderUnverifiedCard(idx) {
-  const list = document.getElementById('step2-unverified-list');
+  const list = document.getElementById('step2a-unverified-list');
   const btn = document.getElementById('correct-save-btn');
   const progress = document.getElementById('unverified-progress');
 
@@ -481,12 +539,12 @@ function toggleDigit(chip, orderNo) {
   const town = unverifiedAll[unverifiedIndex].town_name || unverifiedAll[unverifiedIndex].zipcode || '';
   const suffix = arr.length > 0 ? arr.join('-') : '';
   const preview = suffix ? town + ' ' + suffix : town;
-  const card = document.querySelector('#step2-unverified-list .correct-preview');
+  const card = document.querySelector('#step2a-unverified-list .correct-preview');
   if (card) card.textContent = preview;
 }
 
 async function saveOneCorrection() {
-  const msg = document.getElementById('step2-correct-saved');
+  const msg = document.getElementById('step2a-correct-saved');
   const u = unverifiedAll[unverifiedIndex];
   const digits = selectedDigits[u.customerOrderNo] || [];
   if (digits.length === 0) {
@@ -532,8 +590,8 @@ function badge(status) {
   return '<span class="badge badge-error">失败</span>';
 }
 
-function renderSummary2(s) {
-  document.getElementById('step2-summary').innerHTML =
+function renderAddressSummary(s) {
+  document.getElementById('step2a-summary').innerHTML =
     '<div class="summary-item">总数：<span>'+(s.total||0)+'</span></div>'+
     '<div class="summary-item">已验证：<span style="color:#2e7d32;">'+(s.verified||0)+'</span></div>'+
     '<div class="summary-item">未验证：<span style="color:#e65100;">'+(s.unverified||0)+'</span></div>'+
@@ -545,14 +603,18 @@ function hideStep(n) {
 }
 function resetDownstream() {
   hideStep(2); hideStep(3);
-  document.getElementById('step2-btn').disabled = true;
+  document.getElementById('step2a-btn').disabled = true;
+  document.getElementById('step2b-btn').disabled = true;
   document.getElementById('step3-btn').disabled = true;
-  markCard('step2-card', ''); markCard('step3-card', '');
-  document.getElementById('step2-status').innerHTML = '';
+  markCard('step2a-card', ''); markCard('step2b-card', ''); markCard('step3-card', '');
+  document.getElementById('step2a-status').innerHTML = '';
+  document.getElementById('step2b-status').innerHTML = '';
   document.getElementById('step3-status').innerHTML = '';
   selectedDigits = {};
   unverifiedAll = [];
   unverifiedIndex = 0;
+  document.getElementById('step2a-result').style.display = 'none';
+  document.getElementById('step2b-result').style.display = 'none';
 }
 function resetStep3() {
   hideStep(3);
