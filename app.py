@@ -543,12 +543,14 @@ def step2a_address():
                     if cdata.get("cleansed_address"):
                         is_valid = cdata.get("is_valid", False)
                         verdict = cdata.get("verdict_level", "")
+                        cleansed_addr = _fix_street_number(cdata["cleansed_address"])
+                        cdata["cleansed_address"] = cleansed_addr
                         result = {
                             "customerOrderNo": order_no,
                             "raw_address": item["raw_address"],
                             "provided_zipcode": item["provided_zipcode"],
-                            "cleansed_address": cdata["cleansed_address"],
-                            "cleansed_zipcode": cdata["cleansed_zip"],
+                            "cleansed_address": cleansed_addr,
+                            "cleansed_zipcode": cdata.get("cleansed_zip", ""),
                             "is_valid": is_valid,
                             "verdict_level": verdict,
                             "status": "verified" if is_valid else "unverified",
@@ -744,6 +746,7 @@ def step3_update():
 
         if cleansed_address:
             province, city, district, street = _parse_japanese_address(cleansed_address)
+            street = _fix_street_number(street)
 
         consignee_name = ndata.get("resolved_name", item.get("consigneeName", ""))
         consignee_company = ndata.get("resolved_company", "")
