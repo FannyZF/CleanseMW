@@ -367,6 +367,12 @@ def _parse_japanese_address(full_addr: str) -> tuple:
             address = remaining
 
     return province, city, district, address
+
+
+def _fix_street_number(address: str) -> str:
+    return re.sub(r"(\d+)\s+(\d+)", r"\1-\2", address)
+
+
 def lookup_zipcloud(zipcode: str) -> str:
     if not zipcode:
         return ""
