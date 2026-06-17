@@ -230,37 +230,32 @@ def extract_cleanse_result(cleanse_response: dict) -> dict:
 # ── Name cleansing via API Hub ─────────────────────────────────────────
 def cleanse_names_batch(items: list):
     cfg = _get_config()
-    batch = [
-        {
-            "order_id": item["customerOrderNo"],
-            "raw_name": item.get("consigneeName", ""),
-        }
-        for item in items
-        if item.get("consigneeName")
-    ]
-    if not batch:
-        return {}
-
     headers = {
         "Content-Type": "application/json",
         "X-API-Key": cfg["address_api_key"],
     }
+    api_url = f"{cfg['address_api_url']}/jp/cleanse/name"
 
-    logger.info("Cleansing %d names", len(batch))
-    try:
-        resp = requests.post(
-            f"{cfg['address_api_url']}/jp/cleanse/name",
-            headers=headers,
-            json=batch,
-            timeout=30,
-        )
-        return resp.json()
-    except requests.exceptions.Timeout:
-        logger.error("Name cleansing timed out after 30s")
-        return {}
-    except Exception as exc:
-        logger.error("Name cleansing request failed: %s", exc)
-        return {}
+    all_results = []
+    for item in items:
+        if not item.get("consigneeName"):
+            continue
+        body = {
+            "order_id": item["customerOrderNo"],
+            "raw_name": item["consigneeName"],
+        }
+        try:
+            resp = requests.post(api_url, headers=headers, json=body, timeout=15)
+            data = resp.json()
+            if data.get("status") == "success":
+                all_results.append(data)
+        except requests.exceptions.Timeout:
+            logger.error("Name cleanse timeout for %s", item["customerOrderNo"])
+        except Exception as exc:
+            logger.error("Name cleanse failed for %s: %s", item["customerOrderNo"], exc)
+
+    logger.info("Cleansed %d/%d names", len(all_results), len(items))
+    return {"status": "success", "results": all_results} if all_results else {}
 
 
 def extract_name_result(name_response: dict) -> dict:
