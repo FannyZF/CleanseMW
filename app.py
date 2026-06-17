@@ -442,6 +442,55 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/api/test-its", methods=["POST"])
+def test_its():
+    """Test ITS API connectivity and return detailed diagnostic info."""
+    data = request.get_json(silent=True) or {}
+    test_order = data.get("order_no", "TEST")
+    cfg = _get_config()
+
+    body = {"customerOrderNo": test_order}
+    body_str = json.dumps(body, ensure_ascii=False)
+    timestamp = str(int(time.time()))
+    raw_sign = f"{cfg['its_apikey']}{cfg['its_apisecret']}{cfg['its_usertoken']}{timestamp}{body_str}"
+    signature = hashlib.md5(raw_sign.encode("utf-8")).hexdigest()
+    base_url = cfg["its_base_url"]
+    url = f"{base_url}/its-api/cs/api/getOrderInfo"
+
+    info = {
+        "url": url,
+        "timestamp": timestamp,
+        "body": body_str,
+        "sign_raw": raw_sign[:50] + "...",
+        "apikey_len": len(cfg["its_apikey"]),
+        "apisecret_len": len(cfg["its_apisecret"]),
+        "usertoken_len": len(cfg["its_usertoken"]),
+    }
+
+    try:
+        resp = requests.post(url, headers={
+            "apikey": cfg["its_apikey"],
+            "signature": signature,
+            "timestamp": timestamp,
+            "usertoken": cfg["its_usertoken"],
+            "Content-Type": "application/json;charset=UTF-8",
+        }, data=body_str.encode("utf-8"), timeout=30)
+        info["http_status"] = resp.status_code
+        info["response_preview"] = resp.text[:500]
+        try:
+            info["response_json"] = resp.json()
+        except Exception:
+            pass
+    except requests.exceptions.ConnectionError as e:
+        info["error"] = f"连接失败: {e}"
+    except requests.exceptions.Timeout:
+        info["error"] = "请求超时 (30s)"
+    except Exception as e:
+        info["error"] = str(e)
+
+    return jsonify(info)
+
+
 @app.route("/api/config", methods=["GET", "POST"])
 def config_handler():
     if request.method == "GET":
