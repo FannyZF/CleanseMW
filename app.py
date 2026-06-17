@@ -167,13 +167,20 @@ def cleanse_addresses_batch(items: list):
     }
 
     logger.info("Cleansing %d addresses", len(batch))
-    resp = requests.post(
-        f"{cfg['address_api_url']}/jp/cleanse/address",
-        headers=headers,
-        json=batch,
-        timeout=120,
-    )
-    return resp.json()
+    try:
+        resp = requests.post(
+            f"{cfg['address_api_url']}/jp/cleanse/address",
+            headers=headers,
+            json=batch,
+            timeout=60,
+        )
+        return resp.json()
+    except requests.exceptions.Timeout:
+        logger.error("Address cleansing timed out after 60s")
+        return {"status": "error", "message": "地址清洗接口超时"}
+    except Exception as exc:
+        logger.error("Address cleansing request failed: %s", exc)
+        return {"status": "error", "message": str(exc)}
 
 
 def extract_cleanse_result(cleanse_response: dict) -> dict:
@@ -240,13 +247,20 @@ def cleanse_names_batch(items: list):
     }
 
     logger.info("Cleansing %d names", len(batch))
-    resp = requests.post(
-        f"{cfg['address_api_url']}/jp/cleanse/name",
-        headers=headers,
-        json=batch,
-        timeout=120,
-    )
-    return resp.json()
+    try:
+        resp = requests.post(
+            f"{cfg['address_api_url']}/jp/cleanse/name",
+            headers=headers,
+            json=batch,
+            timeout=30,
+        )
+        return resp.json()
+    except requests.exceptions.Timeout:
+        logger.error("Name cleansing timed out after 30s")
+        return {}
+    except Exception as exc:
+        logger.error("Name cleansing request failed: %s", exc)
+        return {}
 
 
 def extract_name_result(name_response: dict) -> dict:
