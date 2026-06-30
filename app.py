@@ -399,14 +399,14 @@ def extract_digit_candidates(raw_address: str) -> list:
 def update_order_its(customer_order_no: str, cleansed_address: str, cleansed_postcode: str,
                      consignee_name: str = "", consignee_company: str = "",
                      province: str = "", city: str = "", district: str = ""):
-    consignee = {
-        "consigneeCountry": "JP",
-        "consigneeProvince": province or " ",
-        "consigneeCity": city or " ",
-        "consigneeDistrict": district or " ",
-        "consigneeAddress": cleansed_address,
-        "consigneePostcode": cleansed_postcode,
-    }
+    consignee = {"consigneeCountry": "JP"}
+
+    if cleansed_address:
+        consignee["consigneeProvince"] = province or " "
+        consignee["consigneeCity"] = city or " "
+        consignee["consigneeDistrict"] = district or " "
+        consignee["consigneeAddress"] = cleansed_address
+        consignee["consigneePostcode"] = cleansed_postcode
     if consignee_name:
         consignee["consigneeName"] = consignee_name
     if consignee_company:
