@@ -561,7 +561,7 @@ def step1_fetch_orders():
     })
 
 
-# ── STEP 2a: 地址清洗 ──────────────────────────────────────────────────
+# ── STEP 2a: 地址去重 ──────────────────────────────────────────────────
 @app.route("/api/step2a", methods=["POST"])
 def step2a_address():
     data = request.get_json(silent=True) or {}
@@ -574,111 +574,54 @@ def step2a_address():
         return jsonify({"error": "任务已过期，请从第一步重新开始"}), 400
 
     success_items = task["success_items"]
-    logger.info("[Step 2a] Cleansing %d address(es)", len(success_items))
+    logger.info("[Step 2a] Deduplicating %d address(es)", len(success_items))
 
-    BATCH_SIZE = 100
     results = []
     all_cleansed = {}
-    unverified = []
 
-    # ── Address cleansing ──
-    logger.info("[Step 2] Starting address cleansing...")
-    for i in range(0, len(success_items), BATCH_SIZE):
-        sub_batch = success_items[i : i + BATCH_SIZE]
-        logger.info("[Step 2] Address batch %d/%d (%d items)", i // BATCH_SIZE + 1,
-                    (len(success_items) + BATCH_SIZE - 1) // BATCH_SIZE, len(sub_batch))
-        try:
-            cleanse_resp = cleanse_addresses_batch(sub_batch)
-            if cleanse_resp.get("status") == "success":
-                cleanse_map = extract_cleanse_result(cleanse_resp)
-                all_cleansed.update(cleanse_map)
-                for item in sub_batch:
-                    order_no = item["customerOrderNo"]
-                    cdata = cleanse_map.get(order_no, {})
-                    if cdata.get("cleansed_address"):
-                        is_valid = cdata.get("is_valid", False)
-                        verdict = cdata.get("verdict_level", "")
-                        cleansed_addr = _fix_street_number(cdata["cleansed_address"])
-                        cdata["cleansed_address"] = cleansed_addr
-                        result = {
-                            "customerOrderNo": order_no,
-                            "raw_address": item["raw_address"],
-                            "provided_zipcode": item["provided_zipcode"],
-                            "cleansed_address": cleansed_addr,
-                            "cleansed_zipcode": cdata.get("cleansed_zip", ""),
-                            "is_valid": is_valid,
-                            "verdict_level": verdict,
-                            "status": "verified" if is_valid else "unverified",
-                        }
-                        results.append(result)
-                        if not is_valid:
-                            unverified.append(order_no)
-                    else:
-                        results.append({
-                            "customerOrderNo": order_no,
-                            "raw_address": item["raw_address"],
-                            "provided_zipcode": item["provided_zipcode"],
-                            "status": "error",
-                            "message": "地址清洗未返回有效结果",
-                        })
-            else:
-                error_msg = cleanse_resp.get("message", "地址清洗失败")
-                for item in sub_batch:
-                    results.append({
-                        "customerOrderNo": item["customerOrderNo"],
-                        "raw_address": item["raw_address"],
-                        "provided_zipcode": item["provided_zipcode"],
-                        "status": "error",
-                        "message": error_msg,
-                    })
-        except Exception as exc:
-            logger.exception("[Step 2] Address batch failed")
-            for item in sub_batch:
-                results.append({
-                    "customerOrderNo": item["customerOrderNo"],
-                    "raw_address": item["raw_address"],
-                    "provided_zipcode": item["provided_zipcode"],
-                    "status": "error",
-                    "message": str(exc),
-                })
+    for item in success_items:
+        order_no = item["customerOrderNo"]
+        province = item.get("province", "")
+        city = item.get("city", "")
+        district = item.get("district", "")
+        address = item.get("address", "")
+        postcode = item.get("postcode", "")
 
-    # Store cleanse results
+        cleaned = address
+        for part in [province, city, district]:
+            if part and part in cleaned:
+                cleaned = cleaned.replace(part, "", 1)
+        cleaned = cleaned.strip()
+
+        all_cleansed[order_no] = {
+            "cleansed_address": cleaned,
+            "cleansed_zip": postcode,
+            "is_valid": True,
+        }
+
+        results.append({
+            "customerOrderNo": order_no,
+            "raw_address": item["raw_address"],
+            "province": province,
+            "city": city,
+            "district": district,
+            "original_address": address,
+            "cleansed_address": cleaned,
+            "provided_zipcode": postcode,
+            "cleansed_zipcode": postcode,
+            "status": "success",
+        })
+
     with _task_lock:
         _task_store[task_id]["all_cleansed"] = all_cleansed
         _task_store[task_id]["success_items"] = success_items
 
-    # Enrich unverified orders with ZipCloud data and digit candidates
-    logger.info("[Step 2a] Enriching %d unverified orders...", len(unverified))
-    unverified_details = []
-    for item in success_items:
-        order_no = item["customerOrderNo"]
-        cdata = all_cleansed.get(order_no, {})
-        if cdata.get("cleansed_address") and not cdata.get("is_valid", False):
-            zipcode = cdata.get("cleansed_zip", "") or item.get("provided_zipcode", "")
-            town = lookup_zipcloud(zipcode)
-            digits = extract_digit_candidates(item.get("raw_address", ""))
-            unverified_details.append({
-                "customerOrderNo": order_no,
-                "raw_address": item["raw_address"],
-                "zipcode": zipcode,
-                "town_name": town,
-                "digit_candidates": digits,
-                "cleansed_zipcode": cdata["cleansed_zip"],
-            })
-
     total = len(success_items)
-    verified_count = sum(1 for r in results if r.get("status") == "verified")
-    error_count = sum(1 for r in results if r["status"] == "error")
     return jsonify({
         "task_id": task_id,
         "results": results,
-        "unverified": unverified_details,
-        "summary": {
-            "total": total,
-            "verified": verified_count,
-            "unverified": len(unverified_details),
-            "error": error_count,
-        },
+        "unverified": [],
+        "summary": {"total": total, "verified": total, "unverified": 0, "error": 0},
     })
 
 
@@ -784,7 +727,7 @@ def step3_update():
         cdata = all_cleansed.get(order_no, {})
         ndata = all_names.get(order_no, {})
 
-        has_address = bool(cdata.get("cleansed_address") and cdata.get("is_valid", False))
+        has_address = bool(cdata.get("cleansed_address"))
         has_name = bool(ndata.get("resolved_name"))
 
         if not has_address and not has_name:
@@ -796,7 +739,7 @@ def step3_update():
             continue
 
         cleansed_address = cdata.get("cleansed_address", "")
-        cleansed_zip = cdata.get("cleansed_zip", item.get("provided_zipcode", ""))
+        cleansed_zip = cdata.get("cleansed_zip", item.get("postcode", ""))
         province, city, district, street = "", "", "", ""
 
         if cleansed_address:

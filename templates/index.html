@@ -131,30 +131,19 @@
     </div>
   </div>
 
-  <!-- ── Step 2a: 地址清洗 ── -->
+  <!-- ── Step 2a: 地址去重 ── -->
   <div class="step-card" id="step2a-card">
-    <div class="step-title"><span class="step-num">2a</span> 地址清洗</div>
+    <div class="step-title"><span class="step-num">2a</span> 地址去重</div>
     <div class="step-actions">
-      <button id="step2a-btn" onclick="runStep2a()" disabled>地址清洗</button>
+      <button id="step2a-btn" onclick="runStep2a()" disabled>地址去重</button>
       <span class="status-bar" id="step2a-status"></span>
     </div>
     <div class="step-result" id="step2a-result" style="display:none;">
       <div class="summary" id="step2a-summary"></div>
       <div class="table-wrap">
         <table><thead><tr>
-          <th>订单号</th><th>原始地址</th><th>原始邮编</th><th>清洗后地址</th><th>清洗后邮编</th><th>状态</th><th>说明</th>
+          <th>订单号</th><th>原始地址</th><th>省</th><th>市</th><th>区</th><th>去重后地址</th><th>邮编</th><th>状态</th>
         </tr></thead><tbody id="step2a-tbody"></tbody></table>
-      </div>
-      <div id="step2a-unverified-box" style="display:none; margin-top:14px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-          <label style="margin:0;">以下订单地址未通过验证，请逐一手工修正：</label>
-          <span style="font-size:13px;color:#795548;" id="unverified-progress"></span>
-        </div>
-        <div id="step2a-unverified-list"></div>
-        <div style="margin-top:10px;display:flex;align-items:center;gap:10px;">
-          <button class="btn-sm btn-green" id="correct-save-btn" style="display:none;" onclick="saveOneCorrection()">保存并继续</button>
-          <span id="step2a-correct-saved" style="font-size:13px;"></span>
-        </div>
       </div>
     </div>
   </div>
@@ -324,13 +313,13 @@ async function runStep1() {
   }
 }
 
-// ── Step 2a: Address ──────────────────────────────────────────────────
+// ── Step 2a: Address Dedup ────────────────────────────────────────────
 async function runStep2a() {
   if (!taskId) return;
   const btn = document.getElementById('step2a-btn');
   const status = document.getElementById('step2a-status');
-  btn.disabled = true; btn.textContent = '清洗中...';
-  status.innerHTML = '<span class="loader"></span>正在地址清洗...';
+  btn.disabled = true; btn.textContent = '去重中...';
+  status.innerHTML = '<span class="loader"></span>正在地址去重...';
   markCard('step2a-card', 'active');
   hideStep(3);
   resetStep3();
@@ -342,50 +331,36 @@ async function runStep2a() {
       body: JSON.stringify({task_id: taskId})
     });
     const data = await resp.json();
-    if (data.error) { status.innerHTML = '<span style="color:#c62828;">'+esc(data.error)+'</span>'; btn.disabled = false; btn.textContent = '地址清洗'; return; }
+    if (data.error) { status.innerHTML = '<span style="color:#c62828;">'+esc(data.error)+'</span>'; btn.disabled = false; btn.textContent = '地址去重'; return; }
 
-    step2aData = data;
-    renderAddressSummary(data.summary || {});
+    renderSummary('step2a-summary', data.summary || {});
 
     const tbody = document.getElementById('step2a-tbody');
     tbody.innerHTML = (data.results||[]).length
-      ? data.results.map(r => '<tr id="row-'+escAttr(r.customerOrderNo)+'">'+
+      ? data.results.map(r => '<tr>'+
           '<td>'+esc(r.customerOrderNo)+'</td>'+
-          '<td title="'+escAttr(r.raw_address||'')+'" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;">'+esc(r.raw_address||'')+'</td>'+
-          '<td>'+esc(r.provided_zipcode||'')+'</td>'+
-          '<td title="'+escAttr(r.cleansed_address||'')+'" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;">'+esc(r.cleansed_address||'')+'</td>'+
+          '<td title="'+escAttr(r.raw_address||'')+'" style="max-width:150px;overflow:hidden;text-overflow:ellipsis;">'+esc(r.raw_address||'')+'</td>'+
+          '<td>'+esc(r.province||'')+'</td>'+
+          '<td>'+esc(r.city||'')+'</td>'+
+          '<td>'+esc(r.district||'')+'</td>'+
+          '<td title="'+escAttr(r.cleansed_address||'')+'" style="max-width:150px;overflow:hidden;text-overflow:ellipsis;">'+esc(r.cleansed_address||'')+'</td>'+
           '<td>'+esc(r.cleansed_zipcode||'')+'</td>'+
-          '<td id="badge-'+escAttr(r.customerOrderNo)+'">'+badge(r.status)+'</td>'+
-          '<td>'+esc(r.message||'')+'</td>'+
+          '<td>'+badge(r.status)+'</td>'+
           '</tr>').join('')
-      : '<tr><td colspan="7" class="empty">无结果</td></tr>';
-
-    selectedDigits = {};
-    unverifiedIndex = 0;
-    const unverifiedBox = document.getElementById('step2a-unverified-box');
-    const unverifiedList = document.getElementById('step2a-unverified-list');
-    const unverified = data.unverified || [];
-    if (unverified.length > 0) {
-      unverifiedAll = unverified;
-      unverifiedBox.style.display = 'block';
-      document.getElementById('step2a-correct-saved').textContent = '';
-      renderUnverifiedCard(unverifiedIndex);
-    } else {
-      unverifiedBox.style.display = 'none';
-    }
+      : '<tr><td colspan="8" class="empty">无结果</td></tr>';
 
     document.getElementById('step2a-result').style.display = 'block';
     status.innerHTML = '完成';
     markCard('step2a-card', 'done');
 
-    if ((data.summary||{}).verified > 0) {
+    if ((data.summary||{}).success > 0) {
       document.getElementById('step3-btn').disabled = false;
       markCard('step3-card', 'active');
     }
   } catch(e) {
     status.innerHTML = '<span style="color:#c62828;">请求失败：'+esc(String(e))+'</span>';
   } finally {
-    btn.disabled = false; btn.textContent = '地址清洗';
+    btn.disabled = false; btn.textContent = '地址去重';
   }
 }
 
@@ -476,126 +451,12 @@ async function runStep3() {
   }
 }
 
-// ── Correction helpers (one-at-a-time) ──────────────────────────────────
-let selectedDigits = {};
-let unverifiedAll = [];
-let unverifiedIndex = 0;
-
-function renderUnverifiedCard(idx) {
-  const list = document.getElementById('step2a-unverified-list');
-  const btn = document.getElementById('correct-save-btn');
-  const progress = document.getElementById('unverified-progress');
-
-  if (idx >= unverifiedAll.length) {
-    list.innerHTML = '<div style="padding:16px;text-align:center;color:#2e7d32;font-weight:600;">所有未验证订单已处理完毕，可以执行第三步更新</div>';
-    btn.style.display = 'none';
-    progress.textContent = '';
-    document.getElementById('step3-btn').disabled = false;
-    markCard('step3-card', 'active');
-    return;
-  }
-
-  const u = unverifiedAll[idx];
-  const digits = u.digit_candidates || [];
-  const town = u.town_name || '(邮编查询无结果)';
-  progress.textContent = '第 ' + (idx + 1) + ' / ' + unverifiedAll.length + ' 个';
-
-  // Reset selected digits for this card
-  const prevDigits = selectedDigits[u.customerOrderNo] || [];
-  list.innerHTML =
-    '<div class="correct-card">'+
-      '<div class="row"><span class="label">订单号</span><span class="val">'+esc(u.customerOrderNo)+'</span>'+
-      '<span class="label" style="margin-left:12px;">邮编</span><span class="val">'+esc(u.zipcode)+'</span></div>'+
-      '<div class="row"><span class="label">町名</span><span class="val">'+esc(town)+'</span></div>'+
-      '<div class="row"><span class="label">原始地址</span><span class="val">'+esc(u.raw_address)+'</span></div>'+
-      '<div class="row"><span class="label">选择门牌号</span>'+
-        digits.map(d => {
-          const sel = prevDigits.indexOf(d) >= 0 ? ' selected' : '';
-          return '<span class="digit-chip'+sel+'" data-digit="'+escAttr(d)+'" onclick="toggleDigit(this,\''+escAttr(u.customerOrderNo)+'\')">'+esc(d)+'</span>';
-        }).join('')+
-        (digits.length === 0 ? '<span style="color:#999;">未检测到数字</span>' : '')+
-      '</div>'+
-      '<div class="row"><span class="label">修正预览</span><span class="correct-preview">'+
-        (prevDigits.length > 0 ? esc(town + ' ' + prevDigits.join('-')) : '')+
-      '</span></div>'+
-    '</div>';
-
-  btn.style.display = 'inline-block';
-}
-
-function toggleDigit(chip, orderNo) {
-  const digit = chip.getAttribute('data-digit');
-  if (!selectedDigits[orderNo]) selectedDigits[orderNo] = [];
-  const arr = selectedDigits[orderNo];
-  const existingIdx = arr.indexOf(digit);
-  if (existingIdx >= 0) {
-    arr.splice(existingIdx, 1);
-    chip.classList.remove('selected');
-  } else {
-    arr.push(digit);
-    chip.classList.add('selected');
-  }
-  // Update preview in the current card
-  const town = unverifiedAll[unverifiedIndex].town_name || unverifiedAll[unverifiedIndex].zipcode || '';
-  const suffix = arr.length > 0 ? arr.join('-') : '';
-  const preview = suffix ? town + ' ' + suffix : town;
-  const card = document.querySelector('#step2a-unverified-list .correct-preview');
-  if (card) card.textContent = preview;
-}
-
-async function saveOneCorrection() {
-  const msg = document.getElementById('step2a-correct-saved');
-  const u = unverifiedAll[unverifiedIndex];
-  const digits = selectedDigits[u.customerOrderNo] || [];
-  if (digits.length === 0) {
-    msg.textContent = '请先选择门牌号数字'; msg.style.color = '#c62828';
-    return;
-  }
-  const town = u.town_name || u.zipcode || '';
-  const correctedAddr = town + ' ' + digits.join('-');
-  msg.textContent = ''; msg.style.color = '';
-
-  try {
-    const resp = await fetch('/api/correct', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({task_id: taskId, corrections: {[u.customerOrderNo]: correctedAddr}})
-    });
-    const data = await resp.json();
-    if (data.status === 'saved') {
-      // Update table badge
-      const badgeEl = document.getElementById('badge-'+u.customerOrderNo);
-      if (badgeEl) badgeEl.innerHTML = '<span class="badge badge-manual">已人工修改</span>';
-      // Move to next
-      unverifiedIndex++;
-      renderUnverifiedCard(unverifiedIndex);
-    }
-  } catch(e) {
-    msg.textContent = '保存失败: '+esc(String(e)); msg.style.color = '#c62828';
-  }
-}
-
-function verdictBadge(verdict) {
-  if (!verdict) return '';
-  const map = { reliable: '#2e7d32', trusted: '#1565c0', review: '#e65100', unreliable: '#c62828' };
-  const color = map[verdict] || '#666';
-  return '<span class="badge" style="background:'+color+'15;color:'+color+';">'+esc(verdict)+'</span>';
-}
-
 function badge(status) {
   if (status === 'success') return '<span class="badge badge-success">成功</span>';
   if (status === 'verified') return '<span class="badge badge-success">已验证</span>';
   if (status === 'unverified') return '<span class="badge badge-error">未验证</span>';
   if (status === 'skip') return '<span class="badge badge-skip">跳过</span>';
   return '<span class="badge badge-error">失败</span>';
-}
-
-function renderAddressSummary(s) {
-  document.getElementById('step2a-summary').innerHTML =
-    '<div class="summary-item">总数：<span>'+(s.total||0)+'</span></div>'+
-    '<div class="summary-item">已验证：<span style="color:#2e7d32;">'+(s.verified||0)+'</span></div>'+
-    '<div class="summary-item">未验证：<span style="color:#e65100;">'+(s.unverified||0)+'</span></div>'+
-    '<div class="summary-item">失败：<span style="color:#c62828;">'+(s.error||0)+'</span></div>';
 }
 
 function hideStep(n) {
@@ -615,9 +476,6 @@ function resetDownstream() {
   document.getElementById('step2a-status').innerHTML = '';
   document.getElementById('step2b-status').innerHTML = '';
   document.getElementById('step3-status').innerHTML = '';
-  selectedDigits = {};
-  unverifiedAll = [];
-  unverifiedIndex = 0;
   document.getElementById('step2a-result').style.display = 'none';
   document.getElementById('step2b-result').style.display = 'none';
 }
