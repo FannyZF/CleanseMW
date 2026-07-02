@@ -822,8 +822,11 @@ def step3_update():
         province, city, district, street = "", "", "", ""
 
         if cleansed_address:
-            province, city, district, street = _parse_japanese_address(cleansed_address)
+            parsed_prov, parsed_city, parsed_dist, street = _parse_japanese_address(cleansed_address)
             street = _fix_street_number(street)
+            province = item.get("province", "") or parsed_prov
+            city = item.get("city", "") or parsed_city
+            district = item.get("district", "") or parsed_dist
 
         consignee_name = ndata.get("resolved_name", item.get("consigneeName", ""))
         consignee_company = ndata.get("resolved_company", "")
