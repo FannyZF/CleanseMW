@@ -133,6 +133,7 @@ def fetch_order_info(customer_order_no: str):
     address = consignee.get("consigneeAddress") or ""
     postcode = consignee.get("consigneePostcode") or ""
     consignee_name = consignee.get("consigneeName") or ""
+    consignee_phone = consignee.get("consigneePhone") or ""
 
     raw_address = f"{province}{city}{district}{address}".strip()
 
@@ -144,6 +145,7 @@ def fetch_order_info(customer_order_no: str):
         "address": address,
         "postcode": postcode,
         "consigneeName": consignee_name,
+        "consigneePhone": consignee_phone,
         "raw_address": raw_address,
         "provided_zipcode": postcode,
     }, None
@@ -398,7 +400,8 @@ def extract_digit_candidates(raw_address: str) -> list:
     return [c for c in candidates if len(c) != 7 and len(c) <= 5]
 def update_order_its(customer_order_no: str, cleansed_address: str, cleansed_postcode: str,
                      consignee_name: str = "", consignee_company: str = "",
-                     province: str = "", city: str = "", district: str = ""):
+                     province: str = "", city: str = "", district: str = "",
+                     consignee_phone: str = ""):
     consignee = {"consigneeCountry": "JP"}
 
     if cleansed_address:
@@ -411,6 +414,8 @@ def update_order_its(customer_order_no: str, cleansed_address: str, cleansed_pos
         consignee["consigneeName"] = consignee_name
     if consignee_company:
         consignee["consigneeCompany"] = consignee_company
+    if consignee_phone:
+        consignee["consigneePhone"] = consignee_phone
     body = {
         "customerOrderNo": customer_order_no,
         "consignee": consignee,
@@ -539,6 +544,7 @@ def step1_fetch_orders():
                 "address": item["address"],
                 "postcode": item["postcode"],
                 "consigneeName": item["consigneeName"],
+                "consigneePhone": item.get("consigneePhone", ""),
                 "status": "success",
             })
             success_items.append(item)
@@ -679,6 +685,75 @@ def step2b_name():
     })
 
 
+# ── STEP 2c: 电话补位 ──────────────────────────────────────────────────
+@app.route("/api/step2c", methods=["POST"])
+def step2c_phone():
+    data = request.get_json(silent=True) or {}
+    task_id = data.get("task_id", "")
+
+    with _task_lock:
+        task = _task_store.get(task_id)
+
+    if not task:
+        return jsonify({"error": "任务已过期"}), 400
+
+    success_items = task["success_items"]
+    logger.info("[Step 2c] Fixing phone for %d order(s)", len(success_items))
+
+    results = []
+    all_phones = {}
+
+    for item in success_items:
+        order_no = item["customerOrderNo"]
+        phone = (item.get("consigneePhone") or "").strip()
+        original = phone
+        status = "skip"
+        message = ""
+
+        digits_only = re.sub(r"[^\d]", "", phone)
+        length = len(digits_only)
+        starts_with_zero = digits_only.startswith("0")
+
+        if length == 11 and starts_with_zero:
+            status = "valid"
+            message = "有效号码"
+        elif length == 10 and starts_with_zero:
+            status = "valid"
+            message = "有效号码"
+        elif length == 10 and not starts_with_zero:
+            phone = "0" + digits_only
+            status = "fixed"
+            message = "前补0 → 11位"
+        elif length == 9 and not starts_with_zero:
+            phone = "0" + digits_only
+            status = "fixed"
+            message = "前补0 → 10位"
+        else:
+            status = "skip"
+            message = f"号码格式不符合规则 ({length}位)"
+
+        all_phones[order_no] = phone if status in ("valid", "fixed") else original
+
+        results.append({
+            "customerOrderNo": order_no,
+            "original_phone": original,
+            "fixed_phone": phone if status in ("valid", "fixed") else original,
+            "status": status,
+            "message": message,
+        })
+
+    with _task_lock:
+        _task_store[task_id]["all_phones"] = all_phones
+
+    fixed_count = sum(1 for r in results if r["status"] == "fixed")
+    valid_count = sum(1 for r in results if r["status"] == "valid")
+    return jsonify({
+        "task_id": task_id,
+        "results": results,
+        "summary": {"total": len(success_items), "fixed": fixed_count, "valid": valid_count, "skip": len(success_items) - fixed_count - valid_count},
+    })
+
+
 # ── 手动修正 ────────────────────────────────────────────────────────────
 @app.route("/api/correct", methods=["POST"])
 def save_corrections():
@@ -719,6 +794,7 @@ def step3_update():
     success_items = task["success_items"]
     all_cleansed = task.get("all_cleansed", {})
     all_names = task.get("all_names", {})
+    all_phones = task.get("all_phones", {})
     logger.info("[Step 3] Updating %d order(s)", len(success_items))
 
     results = []
@@ -726,15 +802,18 @@ def step3_update():
         order_no = item["customerOrderNo"]
         cdata = all_cleansed.get(order_no, {})
         ndata = all_names.get(order_no, {})
+        pdata = all_phones.get(order_no, "")
 
         has_address = bool(cdata.get("cleansed_address"))
         has_name = bool(ndata.get("resolved_name"))
+        has_phone = bool(pdata and pdata != item.get("consigneePhone", ""))
 
-        if not has_address and not has_name:
+        has_any = has_address or has_name or has_phone
+        if not has_any:
             results.append({
                 "customerOrderNo": order_no,
                 "status": "skip",
-                "message": "无地址和姓名清洗数据，跳过更新",
+                "message": "无地址、姓名或电话清洗数据，跳过更新",
             })
             continue
 
@@ -748,12 +827,14 @@ def step3_update():
 
         consignee_name = ndata.get("resolved_name", item.get("consigneeName", ""))
         consignee_company = ndata.get("resolved_company", "")
+        consignee_phone = pdata if isinstance(pdata, str) and pdata != item.get("consigneePhone", "") else ""
 
         try:
             update_resp = update_order_its(
                 order_no, street or cleansed_address, cleansed_zip,
                 consignee_name, consignee_company,
                 province, city, district,
+                consignee_phone,
             )
             if update_resp.get("code") == 0:
                 results.append({
