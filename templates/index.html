@@ -373,7 +373,7 @@ async function runStep2a() {
     status.innerHTML = '完成';
     markCard('step2a-card', 'done');
 
-    if ((data.summary||{}).success > 0) {
+    if ((data.summary||{}).verified > 0) {
       document.getElementById('step3-btn').disabled = false;
       markCard('step3-card', 'active');
     }
